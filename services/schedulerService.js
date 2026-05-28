@@ -36,7 +36,9 @@ function startScheduler() {
 
   cron.schedule('0 9 * * *', async () => {
 
-    /*
+    /*console.log(
+  '⏰ Daily subscription job started'
+)
     ========================================
     PREVENT OVERLAP
     ========================================
