@@ -31,9 +31,7 @@ ROOT ROUTE
 */
 
 app.get('/', (req, res) => {
-
   res.send('Koshya backend is running 🚀')
-
 })
 
 /*
