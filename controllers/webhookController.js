@@ -169,10 +169,13 @@ Prime renews on Jan 20 every year - 1499`
     ========================================
     */
 
-    const parsed =
-      parseMessage(text)
+   const parsed =
+  parseMessage(text)
 
-    console.log(parsed)
+console.log(
+  'PARSED RESULT:',
+  JSON.stringify(parsed, null, 2)
+)
 
     /*
     ========================================
@@ -209,17 +212,24 @@ Prime renews on Jan 20 every year - 1499`
 
       if (!result.success) {
 
-        console.log(result.error)
+  console.log(
+    'SUBSCRIPTION ERROR:',
+    JSON.stringify(
+      result.error,
+      null,
+      2
+    )
+  )
 
-        await sendWhatsAppMessage(
+  await sendWhatsAppMessage(
 
-          sender,
+    sender,
 
-          '❌ Failed to save subscription'
-        )
+    '❌ Failed to save subscription'
+  )
 
-        return res.sendStatus(200)
-      }
+  return res.sendStatus(200)
+}
 
       await sendWhatsAppMessage(
 
