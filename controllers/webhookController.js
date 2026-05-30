@@ -107,8 +107,9 @@ const handleWebhook = async (
     const sender =
       incomingMessage.from
 
-    const text =
+    const text = (
       incomingMessage.text?.body || ''
+    ).trim()
 
     console.log('📱 Sender:', sender)
     console.log('💬 Message:', text)
