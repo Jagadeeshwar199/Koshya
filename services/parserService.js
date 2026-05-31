@@ -658,9 +658,60 @@ function mergePendingDrafts(existing, incoming) {
   }
 }
 
+function toDraftFields(source = {}) {
+  return {
+    serviceName: source.serviceName ?? null,
+    amount: source.amount ?? null,
+    recurrence: source.recurrence ?? null,
+    renewalDay: source.renewalDay ?? null,
+    renewalMonth: source.renewalMonth ?? null
+  }
+}
+
+function buildNormalizedParseResponse(parsed) {
+  if (parsed.type === 'subscription' && parsed.success) {
+    return {
+      success: true,
+      status: 'complete',
+      subscription: toDraftFields(parsed),
+      draft: null,
+      missing: []
+    }
+  }
+
+  if (parsed.type === 'incomplete') {
+    const draft = toDraftFields(parsed.draft)
+
+    return {
+      success: false,
+      status: 'incomplete',
+      subscription: null,
+      draft,
+      missing: parsed.missing ?? getMissing(draft)
+    }
+  }
+
+  return {
+    success: false,
+    status: 'unknown',
+    subscription: null,
+    draft: null,
+    missing: []
+  }
+}
+
+function parseSubscription(text, pending = null) {
+  const parsed = parseMessage(text, pending)
+
+  return buildNormalizedParseResponse(parsed)
+}
+
 module.exports = {
   parseMessage,
+  parseSubscription,
+  buildNormalizedParseResponse,
   mergePendingDrafts,
   finalizeDraft,
-  getMissing
+  getMissing,
+  normalizeText
 }
