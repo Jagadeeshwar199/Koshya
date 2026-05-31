@@ -490,6 +490,16 @@ function parseMessage(text, pending = null) {
     return { success: false, type: 'unknown' }
   }
 
+  if (/^(?:renewal reminder|need reminder)$/i.test(normalized)) {
+    return finalizeDraft({
+      serviceName: null,
+      amount: null,
+      recurrence: null,
+      renewalDay: null,
+      renewalMonth: null
+    })
+  }
+
   if (pending) {
     const combined = normalizeText(
       buildCombinedString(pending, normalized)
