@@ -1,6 +1,7 @@
 const {
   generateReminders,
   createReminderFromIntent,
+  updateLatestReminderFromIntent,
   getPendingReminders,
   getUserReminders,
   markReminderSent,
@@ -95,6 +96,19 @@ or
 "change to 6 PM"
 
 to update the reminder.`
+}
+
+function formatReminderUpdateConfirmation(reminder, now = new Date()) {
+  const formatted = formatReminderTime(reminder.triggerAt, now)
+
+  return `✅ Reminder updated
+
+${reminder.message}
+
+📅 ${formatted.dateLabel}
+⏰ ${formatted.timeLabel}
+
+This reminder will be sent once.`
 }
 
 function reminderMatchesDate(reminder, dateEntity, now = new Date()) {
@@ -327,6 +341,39 @@ async function handleReminderCreateIntent(sender, text, intent) {
   }
 }
 
+async function handleReminderUpdateIntent(sender, intent) {
+  const reminder = await updateLatestReminderFromIntent({
+    userPhone: sender,
+    entities: intent.entities
+  })
+
+  if (!reminder) {
+    const reply = await sendWhatsAppMessage(
+      sender,
+      `I couldn't find an active reminder to update.`
+    )
+
+    return {
+      ok: true,
+      intent: intent.intent,
+      reminder: null,
+      replySent: reply.success
+    }
+  }
+
+  const reply = await sendWhatsAppMessage(
+    sender,
+    formatReminderUpdateConfirmation(reminder)
+  )
+
+  return {
+    ok: true,
+    intent: intent.intent,
+    reminder,
+    replySent: reply.success
+  }
+}
+
 async function handleReminderQueryIntent(sender, intent) {
   const now = new Date()
   const serviceName = intent.entities.serviceName
@@ -399,9 +446,11 @@ module.exports = {
   pending,
   sent,
   handleReminderCreateIntent,
+  handleReminderUpdateIntent,
   handleReminderQueryIntent,
   formatReminderTime,
   formatReminderConfirmation,
+  formatReminderUpdateConfirmation,
   formatReminderListTime,
   matchSubscriptionsByService
 }
