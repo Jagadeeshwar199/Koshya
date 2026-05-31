@@ -1,29 +1,45 @@
 const supabase = require('../config/supabase')
 
-const PREFIX = '__PENDING__:'
+const PREFIX = 'PENDING_SUB:'
 
 async function getPending(userPhone) {
   const { data, error } = await supabase
     .from('messages')
-    .select('message')
+    .select('message, created_at')
     .eq('user_phone', userPhone)
-    .like('message', `${PREFIX}%`)
     .order('created_at', { ascending: false })
-    .limit(1)
+    .limit(30)
 
   if (error || !data?.length) {
     return null
   }
 
-  try {
-    const draft = JSON.parse(data[0].message.slice(PREFIX.length))
-    if (!draft || draft.cleared) {
-      return null
+  for (const row of data) {
+    const raw = row.message
+    let json = null
+
+    if (raw.startsWith(PREFIX)) {
+      json = raw.slice(PREFIX.length)
+    } else if (raw.startsWith('__PENDING__:')) {
+      json = raw.slice('__PENDING__:'.length)
+    } else {
+      continue
     }
-    return draft
-  } catch {
-    return null
+
+    try {
+      const draft = JSON.parse(json)
+
+      if (!draft || draft.cleared) {
+        continue
+      }
+
+      return draft
+    } catch {
+      continue
+    }
   }
+
+  return null
 }
 
 async function setPending(userPhone, draft) {

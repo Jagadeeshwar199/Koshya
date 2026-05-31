@@ -270,6 +270,18 @@ function tryPatterns(text) {
         recurrence: 'monthly',
         amount: Number(m[3])
       })
+    },
+    {
+      regex: new RegExp(
+        `^(.+?) ${AMOUNT} monthly on (\\d{1,2})(?:st|nd|rd|th)?\\s*$`,
+        'i'
+      ),
+      map: (m) => ({
+        serviceName: m[1],
+        amount: Number(m[2]),
+        recurrence: 'monthly',
+        renewalDay: Number(m[3])
+      })
     }
   ]
 
@@ -343,6 +355,7 @@ function extractRenewal(text) {
     /renews?\s+on\s+(\d{1,2})(?:st|nd|rd|th)?/i
   )
   const onThe = text.match(/on\s+the\s+(\d{1,2})(?:st|nd|rd|th)?/i)
+  const onDay = text.match(/\bon\s+(\d{1,2})(?:st|nd|rd|th)?\b/i)
   const monthDay = text.match(
     new RegExp(`(${MONTH_PATTERN})\\s+(\\d{1,2})`, 'i')
   )
@@ -357,6 +370,8 @@ function extractRenewal(text) {
     renewalDay = Number(renewsDay[1])
   } else if (onThe) {
     renewalDay = Number(onThe[1])
+  } else if (onDay) {
+    renewalDay = Number(onDay[1])
   } else if (monthDay) {
     renewalMonth = monthDay[1]
     renewalDay = Number(monthDay[2])
@@ -366,13 +381,16 @@ function extractRenewal(text) {
 }
 
 function extractServiceName(text) {
+  if (/^\d/.test(text)) {
+    return null
+  }
+
   const intentPatterns = [
     /^need reminder for (.+)$/i,
     /^add (.+)$/i,
     /^renewal reminder(?:\s+for)?\s*(.+)$/i,
     /^(.+?)\s+subscription$/i,
     /^i pay \d+ for (.+?)(?:\s+every|\s*$)/i,
-    /^(.+?)\s+₹?\s*\d+/i,
     /^(.+?)\s+renews?\b/i
   ]
 
@@ -412,7 +430,7 @@ function mergeDraft(pending, text) {
   const fromText = extractPartial(text)
 
   return {
-    serviceName: fromText.serviceName || pending.serviceName || null,
+    serviceName: pending.serviceName || fromText.serviceName || null,
     amount: fromText.amount ?? pending.amount ?? null,
     recurrence: fromText.recurrence || pending.recurrence || null,
     renewalDay: fromText.renewalDay ?? pending.renewalDay ?? null,
@@ -421,25 +439,11 @@ function mergeDraft(pending, text) {
 }
 
 function buildCombinedString(draft, text) {
-  const parts = []
-
   if (draft.serviceName) {
-    parts.push(draft.serviceName)
-  }
-  if (draft.amount) {
-    parts.push(String(draft.amount))
-  }
-  if (draft.recurrence) {
-    parts.push(draft.recurrence)
-  }
-  if (draft.renewalMonth && draft.renewalDay) {
-    parts.push(`renews on ${draft.renewalMonth} ${draft.renewalDay}`)
-  } else if (draft.renewalDay) {
-    parts.push(`renews on ${draft.renewalDay}th every month`)
+    return `${draft.serviceName} ${text}`
   }
 
-  parts.push(text)
-  return parts.join(' ')
+  return text
 }
 
 function getMissing(draft) {
@@ -453,6 +457,13 @@ function getMissing(draft) {
   }
   if (!draft.recurrence) {
     missing.push('recurrence')
+  }
+  if (
+    draft.recurrence === 'monthly' &&
+    !draft.renewalDay &&
+    !draft.renewalMonth
+  ) {
+    missing.push('renewalDate')
   }
 
   return missing
