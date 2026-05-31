@@ -9,6 +9,7 @@
     "test:api": "node tests/api.test.js",
     "test:intents": "node tests/intent.test.js",
     "test:intent-router": "node tests/intent-router.test.js",
+    "test:reminder-confirmation": "node tests/reminder-confirmation.test.js",
     "test:reminders": "node tests/reminder.test.js",
     "test:parser": "node tests/parser.test.js",
     "test:parser:sheet": "node tests/user-test-sheet.js"
