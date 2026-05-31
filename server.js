@@ -6,6 +6,9 @@ const express =
 const webhookRoutes =
   require('./routes/webhookRoutes')
 
+const parseRoutes =
+  require('./routes/parseRoutes')
+
 const {
   startScheduler
 } = require('./services/schedulerService')
@@ -23,6 +26,7 @@ const app = express()
 app.use(express.json())
 
 app.use('/', webhookRoutes)
+app.use('/', parseRoutes)
 
 /*
 ========================================
