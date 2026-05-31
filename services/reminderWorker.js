@@ -1,197 +1,37 @@
-const cron =
-  require('node-cron')
+const cron = require('node-cron')
+const { runReminderJob } = require('./reminderJobService')
 
-const supabase =
-  require('../config/supabase')
+const CRON_SCHEDULE =
+  process.env.REMINDER_CRON_SCHEDULE || '0 9,21 * * *'
 
-const {
-  sendWhatsAppMessage
-} = require('./whatsappService')
-
-/*
-========================================
-PREVENT OVERLAPPING RUNS
-========================================
-*/
+const TIMEZONE =
+  process.env.REMINDER_TIMEZONE || 'Asia/Kolkata'
 
 let isRunning = false
 
-/*
-========================================
-REMINDER WORKER
-========================================
-*/
-
-cron.schedule('* * * * *', async () => {
-
-  /*
-  ========================================
-  PREVENT DOUBLE RUNS
-  ========================================
-  */
-
+async function runSafely() {
   if (isRunning) {
-
-    console.log(
-      'Reminder worker already running'
-    )
-
+    console.log('Reminder job already running, skipping')
     return
   }
 
   isRunning = true
 
-  console.log(
-    'Checking pending reminders...'
-  )
-
   try {
-
-    const now =
-      new Date().toISOString()
-
-    /*
-    ========================================
-    FETCH PENDING REMINDERS
-    ========================================
-    */
-
-    const { data, error } =
-      await supabase
-
-        .from('reminders')
-
-        .select('*')
-
-        .eq('status', 'pending')
-
-        .lte('trigger_at', now)
-
-        .limit(20)
-
-    if (error) {
-
-      console.log(
-        'Fetch Error:',
-        error
-      )
-
-      return
-    }
-
-    /*
-    ========================================
-    PROCESS REMINDERS
-    ========================================
-    */
-
-    for (const reminder of data) {
-
-      try {
-
-        console.log(
-          'Processing reminder:',
-          reminder.id
-        )
-
-        /*
-        ========================================
-        LOCK REMINDER
-        ========================================
-        */
-
-        await supabase
-
-          .from('reminders')
-
-          .update({
-            status: 'processing'
-          })
-
-          .eq('id', reminder.id)
-
-        /*
-        ========================================
-        SEND WHATSAPP MESSAGE
-        ========================================
-        */
-
-        await sendWhatsAppMessage(
-
-          reminder.user_phone,
-
-          `⏰ Reminder: ${reminder.message}`
-
-        )
-
-        /*
-        ========================================
-        MARK AS SENT
-        ========================================
-        */
-
-        await supabase
-
-          .from('reminders')
-
-          .update({
-
-            status: 'sent',
-
-            sent_at:
-              new Date().toISOString()
-
-          })
-
-          .eq('id', reminder.id)
-
-        console.log(
-          'Reminder sent:',
-          reminder.id
-        )
-
-      } catch (err) {
-
-        console.log(
-          'Reminder Failed:',
-          err
-        )
-
-        /*
-        ========================================
-        MARK AS FAILED
-        ========================================
-        */
-
-        await supabase
-
-          .from('reminders')
-
-          .update({
-
-            status: 'failed',
-
-            retry_count:
-              reminder.retry_count + 1
-
-          })
-
-          .eq('id', reminder.id)
-
-      }
-
-    }
-
+    await runReminderJob()
   } catch (err) {
-
-    console.log(
-      'Worker Crash:',
-      err
-    )
-
+    console.log('Reminder job crash:', err)
   } finally {
-
     isRunning = false
   }
+}
 
+cron.schedule(CRON_SCHEDULE, runSafely, {
+  timezone: TIMEZONE
 })
+
+console.log(
+  `✅ Reminder worker scheduled (${CRON_SCHEDULE}, ${TIMEZONE}) — every 12 hours`
+)
+
+module.exports = { runSafely }
