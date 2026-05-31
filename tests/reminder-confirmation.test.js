@@ -8,25 +8,33 @@ const {
   formatReminderConfirmation
 } = require('../src/controllers/reminderController')
 
-const now = new Date('2026-05-31T19:25:02.591Z')
+const now = new Date('2026-05-31T18:25:02.591Z')
 const reminder = {
   message: 'Exercise',
-  triggerAt: '2026-06-01T19:25:02.591'
+  triggerAt: '2026-06-01T04:30:00.000Z'
 }
 
-assert.equal(
-  formatReminderTime(reminder.triggerAt, now),
-  'Tomorrow at 12:55 AM IST'
-)
+assert.deepEqual(formatReminderTime(reminder.triggerAt, now), {
+  dateLabel: 'Tomorrow',
+  timeLabel: '10:00 AM IST'
+})
 
 assert.equal(
   formatReminderConfirmation(reminder, now),
 `✅ Reminder created
 
 Exercise
-Tomorrow at 12:55 AM IST
+📅 Tomorrow
+⏰ 10:00 AM IST
 
-This reminder will be sent once.`
+This reminder will be sent once.
+
+Reply:
+"change to 7 AM"
+or
+"change to 6 PM"
+
+to update the reminder.`
 )
 
 console.log('Reminder confirmation tests passed: 2')

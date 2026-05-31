@@ -5,8 +5,10 @@ process.env.SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'test-key'
 
 const {
   computeNextRenewalDate,
-  computeReminderRenewalDate
+  computeReminderRenewalDate,
+  resolveTriggerAt
 } = require('../src/services/reminderService')
+const { detectIntent } = require('../src/services/intentService')
 
 function isoDate(date) {
   return date.toISOString().slice(0, 10)
@@ -60,4 +62,41 @@ assert.equal(
   'custom interval reminder should find the next interval date'
 )
 
-console.log('Reminder tests passed: 5')
+function triggerIso(message) {
+  return resolveTriggerAt(
+    detectIntent(message).entities.date,
+    new Date('2026-05-31T18:25:00.000Z')
+  ).toISOString()
+}
+
+assert.equal(
+  triggerIso('remind me to exercise tomorrow'),
+  '2026-06-01T04:30:00.000Z',
+  'tomorrow defaults to 10 AM IST'
+)
+
+assert.equal(
+  triggerIso('remind me to exercise tomorrow morning'),
+  '2026-06-01T04:30:00.000Z',
+  'tomorrow morning defaults to 10 AM IST'
+)
+
+assert.equal(
+  triggerIso('remind me to exercise tomorrow evening'),
+  '2026-06-01T12:30:00.000Z',
+  'tomorrow evening defaults to 6 PM IST'
+)
+
+assert.equal(
+  triggerIso('remind me to exercise tomorrow at 5pm'),
+  '2026-06-01T11:30:00.000Z',
+  'explicit 5 PM time should be honored'
+)
+
+assert.equal(
+  triggerIso('remind me to exercise next Monday'),
+  '2026-06-01T04:30:00.000Z',
+  'next Monday defaults to 10 AM IST'
+)
+
+console.log('Reminder tests passed: 10')
