@@ -19,7 +19,7 @@ function normalizeText(text) {
 }
 
 function cleanServiceName(name) {
-  return name
+  const cleaned = name
     .replace(/[:;,.=\-]+$/g, '')
     .replace(/^(?:my|the|a|an)\s+/i, '')
     .replace(/\s+subscription$/i, '')
@@ -29,6 +29,11 @@ function cleanServiceName(name) {
     .replace(/\s+renews?$/i, '')
     .replace(/\s+and$/i, '')
     .trim()
+
+  return cleaned
+    .split(/\s+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
 }
 
 function subscriptionResult(fields) {
@@ -539,4 +544,27 @@ function parseMessage(text, pending = null) {
   return { success: false, type: 'unknown' }
 }
 
-module.exports = parseMessage
+function mergePendingDrafts(existing, incoming) {
+  if (!existing) {
+    return { ...incoming }
+  }
+
+  if (!incoming) {
+    return { ...existing }
+  }
+
+  return {
+    serviceName: incoming.serviceName || existing.serviceName || null,
+    amount: incoming.amount ?? existing.amount ?? null,
+    recurrence: incoming.recurrence || existing.recurrence || null,
+    renewalDay: incoming.renewalDay ?? existing.renewalDay ?? null,
+    renewalMonth: incoming.renewalMonth || existing.renewalMonth || null
+  }
+}
+
+module.exports = {
+  parseMessage,
+  mergePendingDrafts,
+  finalizeDraft,
+  getMissing
+}

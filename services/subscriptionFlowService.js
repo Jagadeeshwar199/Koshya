@@ -1,4 +1,9 @@
-const parseMessage = require('./parserService')
+const {
+  parseMessage,
+  mergePendingDrafts,
+  finalizeDraft,
+  getMissing
+} = require('./parserService')
 const { createSubscription } = require('./subscriptionService')
 const {
   getPending,
@@ -50,7 +55,10 @@ async function saveAndReply(sender, parsed) {
 
   if (!result.success) {
     console.log('SUBSCRIPTION ERROR:', JSON.stringify(result.error, null, 2))
-    await sendWhatsAppMessage(sender, '❌ Failed to save subscription. Please try again.')
+    await sendWhatsAppMessage(
+      sender,
+      '❌ Failed to save subscription. Please try again.'
+    )
     return { ok: false }
   }
 
@@ -59,8 +67,28 @@ async function saveAndReply(sender, parsed) {
   return { ok: true }
 }
 
+async function askForMissing(sender, draft) {
+  const missing = getMissing(draft)
+
+  await setPending(sender, draft)
+
+  const intro = draft.serviceName
+    ? `Got ${draft.serviceName}. I need a bit more:`
+    : `Almost there — I need:`
+
+  await sendWhatsAppMessage(
+    sender,
+    `${intro}\n\n${buildQuestions(missing)}\n\nReply in one message, e.g. "149 monthly on 27th"`
+  )
+
+  return { ok: true, asked: true }
+}
+
 async function handleSubscriptionMessage(sender, text) {
   const pending = await getPending(sender)
+
+  console.log('PENDING DRAFT:', JSON.stringify(pending))
+
   const parsed = parseMessage(text, pending)
 
   console.log('PARSED RESULT:', JSON.stringify(parsed, null, 2))
@@ -70,21 +98,29 @@ async function handleSubscriptionMessage(sender, text) {
   }
 
   if (parsed.type === 'incomplete') {
-    await setPending(sender, parsed.draft)
+    const merged = mergePendingDrafts(pending, parsed.draft)
+    const completed = finalizeDraft(merged)
 
-    const intro = parsed.draft.serviceName
-      ? `Got ${parsed.draft.serviceName}. I need a bit more:`
-      : `Almost there — I need:`
+    if (completed.type === 'subscription' && completed.success) {
+      return saveAndReply(sender, completed)
+    }
 
-    await sendWhatsAppMessage(
-      sender,
-      `${intro}\n\n${buildQuestions(parsed.missing)}\n\nReply in one message, e.g. "149 monthly on 27th"`
-    )
-    return { ok: true, asked: true }
+    return askForMissing(sender, merged)
   }
 
   if (pending) {
-    await clearPending(sender)
+    const fallback = parseMessage(text)
+    const partial =
+      fallback.type === 'incomplete' ? fallback.draft : {}
+
+    const merged = mergePendingDrafts(pending, partial)
+    const completed = finalizeDraft(merged)
+
+    if (completed.type === 'subscription' && completed.success) {
+      return saveAndReply(sender, completed)
+    }
+
+    return askForMissing(sender, merged)
   }
 
   await sendWhatsAppMessage(

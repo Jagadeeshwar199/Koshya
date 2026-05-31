@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict')
-const parseMessage = require('../services/parserService')
+const { parseMessage } = require('../services/parserService')
 
 const shouldSave = [
   'Netflix renews on 27th every month - 149',

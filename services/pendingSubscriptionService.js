@@ -1,4 +1,5 @@
 const supabase = require('../config/supabase')
+const { mergePendingDrafts } = require('./parserService')
 
 const PREFIX = 'PENDING_SUB:'
 
@@ -7,8 +8,9 @@ async function getPending(userPhone) {
     .from('messages')
     .select('message, created_at')
     .eq('user_phone', userPhone)
+    .or(`message.ilike.${PREFIX}%,message.ilike.__PENDING__:%`)
     .order('created_at', { ascending: false })
-    .limit(30)
+    .limit(10)
 
   if (error || !data?.length) {
     return null
@@ -43,10 +45,13 @@ async function getPending(userPhone) {
 }
 
 async function setPending(userPhone, draft) {
+  const existing = await getPending(userPhone)
+  const merged = mergePendingDrafts(existing, draft)
+
   await supabase.from('messages').insert([
     {
       user_phone: userPhone,
-      message: `${PREFIX}${JSON.stringify(draft)}`
+      message: `${PREFIX}${JSON.stringify(merged)}`
     }
   ])
 }
