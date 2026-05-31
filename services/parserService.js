@@ -451,6 +451,18 @@ function buildCombinedString(draft, text) {
   return text
 }
 
+function needsRenewalDate(recurrence) {
+  if (!recurrence) {
+    return false
+  }
+
+  if (recurrence === 'monthly') {
+    return true
+  }
+
+  return /^\d+\s+months?$/i.test(recurrence)
+}
+
 function getMissing(draft) {
   const missing = []
 
@@ -464,7 +476,7 @@ function getMissing(draft) {
     missing.push('recurrence')
   }
   if (
-    draft.recurrence === 'monthly' &&
+    needsRenewalDate(draft.recurrence) &&
     !draft.renewalDay &&
     !draft.renewalMonth
   ) {
@@ -472,6 +484,16 @@ function getMissing(draft) {
   }
 
   return missing
+}
+
+function finalizePatternMatch(parsed) {
+  return finalizeDraft({
+    serviceName: parsed.serviceName,
+    amount: parsed.amount,
+    recurrence: parsed.recurrence,
+    renewalDay: parsed.renewalDay ?? null,
+    renewalMonth: parsed.renewalMonth ?? null
+  })
 }
 
 function finalizeDraft(draft) {
@@ -523,7 +545,7 @@ function parseMessage(text, pending = null) {
     const fromCombined = tryPatterns(combined)
 
     if (fromCombined) {
-      return fromCombined
+      return finalizePatternMatch(fromCombined)
     }
 
     return finalizeDraft(mergeDraft(pending, normalized))
@@ -532,7 +554,7 @@ function parseMessage(text, pending = null) {
   const patternResult = tryPatterns(normalized)
 
   if (patternResult) {
-    return patternResult
+    return finalizePatternMatch(patternResult)
   }
 
   const partial = extractPartial(normalized)

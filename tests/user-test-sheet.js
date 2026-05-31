@@ -1,4 +1,4 @@
-const parseMessage = require('../services/parserService')
+const { parseMessage } = require('../services/parserService')
 
 const userTests = [
   ['Netflix renews on 27th every month - 149', 'YES'],

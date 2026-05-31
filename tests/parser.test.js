@@ -4,8 +4,8 @@ const { parseMessage } = require('../services/parserService')
 const shouldSave = [
   'Netflix renews on 27th every month - 149',
   'JioHotstar renews on Apr 12 every 3 months - 599',
-  'Netflix 149 monthly',
-  'Spotify ₹119 monthly'
+  'Prime renews on Jan 20 every year - 1499',
+  'Prime 1499 yearly'
 ]
 
 const shouldAsk = [
@@ -15,7 +15,11 @@ const shouldAsk = [
   '149',
   'monthly',
   'Need reminder for Netflix',
-  'Add Netflix'
+  'Add Netflix',
+  'Netflix 149 monthly',
+  'Spotify ₹119 monthly',
+  'I pay 119 for Spotify every month',
+  'Spotify every 2 months - 119'
 ]
 
 for (const input of shouldSave) {
@@ -30,7 +34,7 @@ for (const input of shouldAsk) {
   assert.ok(r.missing.length > 0)
 }
 
-const followUp = parseMessage('149 monthly', {
+const followUp = parseMessage('149 monthly on 27th', {
   serviceName: 'Netflix',
   amount: null,
   recurrence: null,
@@ -38,5 +42,6 @@ const followUp = parseMessage('149 monthly', {
   renewalMonth: null
 })
 assert.equal(followUp.type, 'subscription', 'follow-up should complete')
+assert.equal(followUp.renewalDay, 27)
 
 console.log('Parser tests passed:', shouldSave.length + shouldAsk.length + 1)
