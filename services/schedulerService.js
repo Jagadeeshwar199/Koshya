@@ -1,12 +1,16 @@
 const { runSafely } = require('./reminderWorker')
+const logger = require('../utils/logger')
 
 function startScheduler() {
-  console.log(
-    '✅ Subscription reminders use the 12-hour reminder worker (9 AM & 9 PM IST by default)'
-  )
+  logger.info('reminder.scheduler_started', {
+    description: 'Subscription reminders use the configured reminder worker'
+  })
 
   runSafely().catch((err) => {
-    console.log('Startup reminder catch-up failed:', err)
+    logger.error('reminder.startup_catchup_failed', {
+      error: err.message,
+      stack: err.stack
+    })
   })
 }
 

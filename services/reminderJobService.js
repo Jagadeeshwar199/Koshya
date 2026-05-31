@@ -1,93 +1,20 @@
 const supabase = require('../config/supabase')
 const { sendWhatsAppMessage } = require('./whatsappService')
-
-const MONTH_INDEX = {
-  jan: 0,
-  feb: 1,
-  mar: 2,
-  apr: 3,
-  may: 4,
-  jun: 5,
-  jul: 6,
-  aug: 7,
-  sep: 8,
-  oct: 9,
-  nov: 10,
-  dec: 11
-}
-
-function startOfDay(date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
-}
-
-function addDays(date, days) {
-  const next = new Date(date)
-  next.setDate(next.getDate() + days)
-  return next
-}
-
-function parseMonth(monthStr) {
-  if (!monthStr) {
-    return null
-  }
-
-  const key = String(monthStr).toLowerCase().slice(0, 3)
-  return MONTH_INDEX[key] ?? null
-}
-
-function computeNextRenewalDate(sub, fromDate = new Date()) {
-  const day = sub.renewal_day
-  const monthIdx = parseMonth(sub.renewal_month)
-  const today = startOfDay(fromDate)
-
-  if (sub.recurrence === 'monthly' && day) {
-    let candidate = new Date(today.getFullYear(), today.getMonth(), day)
-
-    if (candidate < today) {
-      candidate = new Date(today.getFullYear(), today.getMonth() + 1, day)
-    }
-
-    return candidate
-  }
-
-  if (sub.recurrence === 'yearly' && day && monthIdx !== null) {
-    let candidate = new Date(today.getFullYear(), monthIdx, day)
-
-    if (candidate < today) {
-      candidate = new Date(today.getFullYear() + 1, monthIdx, day)
-    }
-
-    return candidate
-  }
-
-  return null
-}
+const {
+  generateReminders,
+  computeNextRenewalDate,
+  computeReminderRenewalDate
+} = require('../src/services/reminderService')
+const logger = require('../utils/logger')
 
 function isSubscriptionReminderDue(sub, fromDate = new Date()) {
-  const nextRenewal = computeNextRenewalDate(sub, fromDate)
-
-  if (!nextRenewal) {
-    return false
-  }
-
-  const daysBefore = sub.reminder_days_before ?? 1
-  const reminderStart = startOfDay(addDays(nextRenewal, -daysBefore))
-  const renewalDay = startOfDay(nextRenewal)
-  const today = startOfDay(fromDate)
-
-  if (today < reminderStart || today > renewalDay) {
-    return false
-  }
-
-  if (sub.last_reminded_at) {
-    const lastReminded = startOfDay(new Date(sub.last_reminded_at))
-
-    if (lastReminded >= reminderStart) {
-      return false
-    }
-  }
-
-  return true
+  return Boolean(
+    computeReminderRenewalDate(
+      sub,
+      fromDate,
+      Number(process.env.REMINDER_CATCH_UP_DAYS || 7)
+    )
+  )
 }
 
 async function processQueuedReminders() {
@@ -105,7 +32,7 @@ async function processQueuedReminders() {
       .limit(50)
 
     if (error) {
-      console.log('Reminder fetch error:', error)
+      logger.error('reminder.queue_fetch_failed', { error })
       break
     }
 
@@ -115,17 +42,30 @@ async function processQueuedReminders() {
 
     for (const reminder of data) {
       try {
-        await supabase
+        logger.info('reminder.delivery_started', {
+          reminderId: reminder.id,
+          userPhone: reminder.user_phone
+        })
+
+        const { error: processingError } = await supabase
           .from('reminders')
           .update({ status: 'processing' })
           .eq('id', reminder.id)
 
-        await sendWhatsAppMessage(
+        if (processingError) {
+          throw processingError
+        }
+
+        const sendResult = await sendWhatsAppMessage(
           reminder.user_phone,
           `⏰ Reminder: ${reminder.message}`
         )
 
-        await supabase
+        if (!sendResult.success) {
+          throw new Error(`WhatsApp send failed: ${JSON.stringify(sendResult.error)}`)
+        }
+
+        const { error: sentError } = await supabase
           .from('reminders')
           .update({
             status: 'sent',
@@ -133,17 +73,35 @@ async function processQueuedReminders() {
           })
           .eq('id', reminder.id)
 
-        sent++
-      } catch (err) {
-        console.log('Reminder failed:', reminder.id, err)
+        if (sentError) {
+          throw sentError
+        }
 
-        await supabase
+        sent++
+        logger.info('reminder.delivery_sent', {
+          reminderId: reminder.id,
+          userPhone: reminder.user_phone
+        })
+      } catch (err) {
+        logger.error('reminder.delivery_failed', {
+          reminderId: reminder.id,
+          error: err.message || err
+        })
+
+        const { error: failedError } = await supabase
           .from('reminders')
           .update({
             status: 'failed',
             retry_count: (reminder.retry_count || 0) + 1
           })
           .eq('id', reminder.id)
+
+        if (failedError) {
+          logger.error('reminder.failure_mark_failed', {
+            reminderId: reminder.id,
+            error: failedError
+          })
+        }
       }
     }
 
@@ -155,77 +113,35 @@ async function processQueuedReminders() {
   return sent
 }
 
-async function processSubscriptionReminders() {
-  const { data: subscriptions, error } = await supabase
-    .from('subscriptions')
-    .select('*')
-    .eq('active', true)
-
-  if (error) {
-    console.log('Subscription fetch error:', error)
-    return 0
-  }
-
-  let sent = 0
-  const now = new Date()
-
-  for (const sub of subscriptions || []) {
-    if (!isSubscriptionReminderDue(sub, now)) {
-      continue
-    }
-
-    try {
-      const renewalDate = computeNextRenewalDate(sub, now)
-      const dateLabel = renewalDate
-        ? renewalDate.toLocaleDateString('en-IN', {
-            day: 'numeric',
-            month: 'short'
-          })
-        : ''
-
-      await sendWhatsAppMessage(
-        sub.user_phone,
-        `⚠️ Subscription Reminder
-
-📦 ${sub.service_name}
-💰 ₹${sub.amount}
-📅 Renews on ${dateLabel}
-
-Reply with updates anytime.`
-      )
-
-      await supabase
-        .from('subscriptions')
-        .update({
-          last_reminded_at: now.toISOString()
-        })
-        .eq('id', sub.id)
-
-      sent++
-      console.log(`Reminder sent for ${sub.service_name}`)
-    } catch (err) {
-      console.log(`Subscription reminder failed: ${sub.id}`, err)
-    }
-  }
-
-  return sent
-}
-
 async function runReminderJob() {
-  console.log('⏰ Reminder job started at', new Date().toISOString())
+  logger.info('reminder.job_started')
 
-  const queued = await processQueuedReminders()
-  const subscriptions = await processSubscriptionReminders()
+  const generation = await generateReminders({
+    daysAhead: Number(process.env.REMINDER_LOOKAHEAD_DAYS || 1),
+    catchUpDays: Number(process.env.REMINDER_CATCH_UP_DAYS || 7)
+  })
+  const sent = await processQueuedReminders()
 
-  console.log(
-    `✅ Reminder job done — queued: ${queued}, subscriptions: ${subscriptions}`
-  )
+  logger.info('reminder.job_done', {
+    generated: generation.generated,
+    skipped: generation.skipped,
+    queued: sent,
+    subscriptions: generation.generated,
+    sent
+  })
 
-  return { queued, subscriptions }
+  return {
+    generated: generation.generated,
+    skipped: generation.skipped,
+    queued: sent,
+    subscriptions: generation.generated,
+    sent
+  }
 }
 
 module.exports = {
   runReminderJob,
+  processQueuedReminders,
   isSubscriptionReminderDue,
   computeNextRenewalDate
 }

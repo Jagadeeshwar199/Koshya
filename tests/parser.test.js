@@ -28,6 +28,9 @@ for (const input of shouldSave) {
   assert.equal(r.success, true)
 }
 
+const customInterval = parseMessage('JioHotstar renews on Apr 12 every 3 months - 599')
+assert.equal(customInterval.recurrence, '3 months', 'custom intervals should be preserved')
+
 for (const input of shouldAsk) {
   const r = parseMessage(input)
   assert.equal(r.type, 'incomplete', `should ask: ${input}`)
@@ -60,5 +63,5 @@ assert.equal(stillNetflix.draft.serviceName, 'Netflix', 'amount follow-up keeps 
 
 console.log(
   'Parser tests passed:',
-  shouldSave.length + shouldAsk.length + 1 + 2
+  shouldSave.length + shouldAsk.length + 1 + 2 + 1
 )

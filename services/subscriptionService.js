@@ -17,15 +17,7 @@ function normalizeRecurrence(recurrence) {
   if (monthsMatch) {
     const months = Number(monthsMatch[1])
 
-    if (months === 3) {
-      return 'yearly'
-    }
-
-    if (months >= 6) {
-      return 'yearly'
-    }
-
-    return 'monthly'
+    return `${months} months`
   }
 
   return lower
@@ -45,6 +37,7 @@ async function createSubscription({
   try {
 
     const {
+      data,
       error
     } = await supabase
 
@@ -70,6 +63,8 @@ async function createSubscription({
         recurrence:
           normalizeRecurrence(recurrence)
       }])
+      .select('*')
+      .maybeSingle()
 
     if (error) {
 
@@ -80,7 +75,8 @@ async function createSubscription({
     }
 
     return {
-      success: true
+      success: true,
+      subscription: data
     }
 
   } catch (err) {
