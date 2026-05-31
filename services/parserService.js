@@ -283,59 +283,249 @@ function tryPatterns(text) {
   return null
 }
 
-function isIncompleteMessage(text) {
+function extractRecurrence(text) {
   const lower = text.toLowerCase()
+  const everyMonths = lower.match(/every\s+(\d+)\s+months?/)
 
-  if (/^(?:need reminder|add |renewal reminder)/i.test(text)) {
-    return true
+  if (everyMonths) {
+    return `${everyMonths[1]} months`
   }
 
-  if (/subscription$/i.test(text) && !/\d/.test(text)) {
-    return true
+  if (/quarterly/.test(lower)) {
+    return '3 months'
   }
 
-  if (/^[^\\d]+$/.test(text) && !/monthly|yearly|every/i.test(text)) {
-    return true
+  if (/yearly|annually|every\s+year/.test(lower)) {
+    return 'yearly'
   }
 
-  if (/^\\d+$/.test(text)) {
-    return true
+  if (/monthly|every\s+month|per\s+month|\/mo\b/.test(lower)) {
+    return 'monthly'
   }
 
-  if (/^monthly$/i.test(text)) {
-    return true
-  }
-
-  const hasRecurrence =
-    /every\\s+month|monthly|yearly|every\\s+\\d+\\s+months?|every\\s+year|quarterly/i.test(
-      lower
-    )
-  const hasAmount = /₹\\s*\\d+|(?:^|\\s)\\d{2,}/.test(text)
-
-  if (hasAmount && !hasRecurrence) {
-    return true
-  }
-
-  if (/^(.+?)\\s*:\\s*\\d+\\s*$/i.test(text) && !hasRecurrence) {
-    return true
-  }
-
-  return false
+  return null
 }
 
-function parseMessage(text) {
+function extractAmount(text, renewalDay) {
+  const matches = [...text.matchAll(/(?:₹|rs\.?|inr\s*)?(\d+)/gi)].map(
+    (m) => Number(m[1])
+  )
+
+  if (!matches.length) {
+    return null
+  }
+
+  const filtered = matches.filter((n) => {
+    if (renewalDay !== null && n === renewalDay) {
+      return false
+    }
+    return n >= 10
+  })
+
+  if (!filtered.length) {
+    return matches[matches.length - 1]
+  }
+
+  return filtered[filtered.length - 1]
+}
+
+function extractRenewal(text) {
+  let renewalDay = null
+  let renewalMonth = null
+
+  const renewsMonthDay = text.match(
+    new RegExp(`renews?\\s+on\\s+(${MONTH_PATTERN})\\s+(\\d{1,2})`, 'i')
+  )
+  const renewsDayMonth = text.match(
+    new RegExp(`renews?\\s+on\\s+(\\d{1,2})\\s+(${MONTH_PATTERN})`, 'i')
+  )
+  const renewsDay = text.match(
+    /renews?\s+on\s+(\d{1,2})(?:st|nd|rd|th)?/i
+  )
+  const onThe = text.match(/on\s+the\s+(\d{1,2})(?:st|nd|rd|th)?/i)
+  const monthDay = text.match(
+    new RegExp(`(${MONTH_PATTERN})\\s+(\\d{1,2})`, 'i')
+  )
+
+  if (renewsMonthDay) {
+    renewalMonth = renewsMonthDay[1]
+    renewalDay = Number(renewsMonthDay[2])
+  } else if (renewsDayMonth) {
+    renewalDay = Number(renewsDayMonth[1])
+    renewalMonth = renewsDayMonth[2]
+  } else if (renewsDay) {
+    renewalDay = Number(renewsDay[1])
+  } else if (onThe) {
+    renewalDay = Number(onThe[1])
+  } else if (monthDay) {
+    renewalMonth = monthDay[1]
+    renewalDay = Number(monthDay[2])
+  }
+
+  return { renewalDay, renewalMonth }
+}
+
+function extractServiceName(text) {
+  const intentPatterns = [
+    /^need reminder for (.+)$/i,
+    /^add (.+)$/i,
+    /^renewal reminder(?:\s+for)?\s*(.+)$/i,
+    /^(.+?)\s+subscription$/i,
+    /^i pay \d+ for (.+?)(?:\s+every|\s*$)/i,
+    /^(.+?)\s+₹?\s*\d+/i,
+    /^(.+?)\s+renews?\b/i
+  ]
+
+  for (const regex of intentPatterns) {
+    const match = text.match(regex)
+    if (match?.[1]) {
+      return cleanServiceName(match[1])
+    }
+  }
+
+  const lower = text.toLowerCase().trim()
+
+  if (
+    /^[a-z0-9+][a-z0-9+\s.-]{0,40}$/i.test(text) &&
+    !/^(monthly|yearly|renewal reminder|\d+)$/i.test(lower) &&
+    !extractRecurrence(text)
+  ) {
+    return cleanServiceName(text)
+  }
+
+  return null
+}
+
+function extractPartial(text) {
+  const { renewalDay, renewalMonth } = extractRenewal(text)
+
+  return {
+    serviceName: extractServiceName(text),
+    amount: extractAmount(text, renewalDay),
+    recurrence: extractRecurrence(text),
+    renewalDay,
+    renewalMonth
+  }
+}
+
+function mergeDraft(pending, text) {
+  const fromText = extractPartial(text)
+
+  return {
+    serviceName: fromText.serviceName || pending.serviceName || null,
+    amount: fromText.amount ?? pending.amount ?? null,
+    recurrence: fromText.recurrence || pending.recurrence || null,
+    renewalDay: fromText.renewalDay ?? pending.renewalDay ?? null,
+    renewalMonth: fromText.renewalMonth || pending.renewalMonth || null
+  }
+}
+
+function buildCombinedString(draft, text) {
+  const parts = []
+
+  if (draft.serviceName) {
+    parts.push(draft.serviceName)
+  }
+  if (draft.amount) {
+    parts.push(String(draft.amount))
+  }
+  if (draft.recurrence) {
+    parts.push(draft.recurrence)
+  }
+  if (draft.renewalMonth && draft.renewalDay) {
+    parts.push(`renews on ${draft.renewalMonth} ${draft.renewalDay}`)
+  } else if (draft.renewalDay) {
+    parts.push(`renews on ${draft.renewalDay}th every month`)
+  }
+
+  parts.push(text)
+  return parts.join(' ')
+}
+
+function getMissing(draft) {
+  const missing = []
+
+  if (!draft.serviceName) {
+    missing.push('serviceName')
+  }
+  if (!draft.amount) {
+    missing.push('amount')
+  }
+  if (!draft.recurrence) {
+    missing.push('recurrence')
+  }
+
+  return missing
+}
+
+function finalizeDraft(draft) {
+  const missing = getMissing(draft)
+
+  if (!missing.length) {
+    return subscriptionResult(draft)
+  }
+
+  return {
+    success: false,
+    type: 'incomplete',
+    draft,
+    missing
+  }
+}
+
+function hasPartialSignal(draft) {
+  return Boolean(
+    draft.serviceName ||
+      draft.amount ||
+      draft.recurrence ||
+      draft.renewalDay ||
+      draft.renewalMonth
+  )
+}
+
+function parseMessage(text, pending = null) {
   const normalized = normalizeText(text)
 
-  if (!normalized || isIncompleteMessage(normalized)) {
-    return { success: false }
+  if (!normalized) {
+    return { success: false, type: 'unknown' }
+  }
+
+  if (/^(?:renewal reminder|need reminder)$/i.test(normalized)) {
+    return finalizeDraft({
+      serviceName: null,
+      amount: null,
+      recurrence: null,
+      renewalDay: null,
+      renewalMonth: null
+    })
+  }
+
+  if (pending) {
+    const combined = normalizeText(
+      buildCombinedString(pending, normalized)
+    )
+    const fromCombined = tryPatterns(combined)
+
+    if (fromCombined) {
+      return fromCombined
+    }
+
+    return finalizeDraft(mergeDraft(pending, normalized))
   }
 
   const patternResult = tryPatterns(normalized)
+
   if (patternResult) {
     return patternResult
   }
 
-  return { success: false }
+  const partial = extractPartial(normalized)
+
+  if (hasPartialSignal(partial)) {
+    return finalizeDraft(partial)
+  }
+
+  return { success: false, type: 'unknown' }
 }
 
 module.exports = parseMessage

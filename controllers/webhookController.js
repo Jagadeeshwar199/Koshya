@@ -1,12 +1,9 @@
 const supabase =
   require('../config/supabase')
 
-const parseMessage =
-  require('../services/parserService')
-
 const {
-  createSubscription
-} = require('../services/subscriptionService')
+  handleSubscriptionMessage
+} = require('../services/subscriptionFlowService')
 
 const {
   sendWhatsAppMessage
@@ -170,106 +167,7 @@ Prime renews on Jan 20 every year - 1499`
     ========================================
     */
 
-   const parsed =
-  parseMessage(text)
-
-console.log(
-  'PARSED RESULT:',
-  JSON.stringify(parsed, null, 2)
-)
-
-    /*
-    ========================================
-    SUBSCRIPTION FLOW
-    ========================================
-    */
-
-    if (
-      parsed.type ===
-      'subscription'
-    ) {
-
-      const result =
-        await createSubscription({
-
-          userPhone:
-            sender,
-
-          serviceName:
-            parsed.serviceName,
-
-          amount:
-            parsed.amount,
-
-          renewalDay:
-            parsed.renewalDay,
-
-          renewalMonth:
-            parsed.renewalMonth,
-
-          recurrence:
-            parsed.recurrence
-        })
-
-      if (!result.success) {
-
-  console.log(
-    'SUBSCRIPTION ERROR:',
-    JSON.stringify(
-      result.error,
-      null,
-      2
-    )
-  )
-
-  await sendWhatsAppMessage(
-
-    sender,
-
-    '❌ Failed to save subscription'
-  )
-
-  return res.sendStatus(200)
-}
-
-      await sendWhatsAppMessage(
-
-        sender,
-
-`✅ Subscription Saved
-
-📦 ${parsed.serviceName}
-💰 ₹${parsed.amount}
-
-📅 ${parsed.renewalMonth || ''} ${parsed.renewalDay}
-
-🔁 ${parsed.recurrence}`
-
-      )
-
-      return res.sendStatus(200)
-    }
-
-    /*
-    ========================================
-    UNKNOWN MESSAGE
-    ========================================
-    */
-
-    await sendWhatsAppMessage(
-
-      sender,
-
-`⚠️ Could not understand subscription.
-
-Examples:
-
-Netflix renews on 28th every month - 249
-
-JioHotstar renews on Jan 12 every 3 months - 599`
-
-    )
-
+    await handleSubscriptionMessage(sender, text)
     return res.sendStatus(200)
 
   } catch (err) {

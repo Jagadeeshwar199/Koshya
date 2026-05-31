@@ -2,7 +2,9 @@ const supabase =
   require('../config/supabase')
 
 function normalizeRecurrence(recurrence) {
-  if (!recurrence) return recurrence
+  if (!recurrence) {
+    return recurrence
+  }
 
   const lower = String(recurrence).toLowerCase().trim()
 
@@ -15,8 +17,13 @@ function normalizeRecurrence(recurrence) {
   if (monthsMatch) {
     const months = Number(monthsMatch[1])
 
-    if (months === 3) return 'yearly'
-    if (months >= 6) return 'yearly'
+    if (months === 3) {
+      return 'yearly'
+    }
+
+    if (months >= 6) {
+      return 'yearly'
+    }
 
     return 'monthly'
   }
