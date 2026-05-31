@@ -1,4 +1,5 @@
 alter table public.subscriptions
+  drop constraint if exists recurrence_check,
   drop constraint if exists subscriptions_recurrence_check;
 
 alter table public.subscriptions
