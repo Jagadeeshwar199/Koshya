@@ -3,8 +3,11 @@ const {
   createReminderFromIntent,
   getPendingReminders,
   getUserReminders,
-  markReminderSent
+  markReminderSent,
+  computeNextRenewalDate,
+  resolveTriggerAt
 } = require('../services/reminderService')
+const { getUserSubscriptions } = require('../services/subscriptionService')
 const { sendWhatsAppMessage } = require('../../services/whatsappService')
 
 function formatReminder(reminder) {
@@ -57,23 +60,111 @@ function formatReminderTime(triggerAt, now = new Date()) {
   const tomorrowKey = getIstDateKey(addDays(now, 1))
 
   if (triggerKey === todayKey) {
-    return `Today at ${time}`
+    return { dateLabel: 'Today', timeLabel: time }
   }
 
   if (triggerKey === tomorrowKey) {
-    return `Tomorrow at ${time}`
+    return { dateLabel: 'Tomorrow', timeLabel: time }
   }
 
-  return `${parts.day} ${parts.month} ${parts.year} at ${time}`
+  return {
+    dateLabel: `${parts.day} ${parts.month} ${parts.year}`,
+    timeLabel: time
+  }
+}
+
+function formatReminderListTime(triggerAt, now = new Date()) {
+  const formatted = formatReminderTime(triggerAt, now)
+  return `${formatted.dateLabel} ${formatted.timeLabel.replace(' IST', '')}`
 }
 
 function formatReminderConfirmation(reminder, now = new Date()) {
+  const formatted = formatReminderTime(reminder.triggerAt, now)
+
   return `✅ Reminder created
 
 ${reminder.message}
-${formatReminderTime(reminder.triggerAt, now)}
+📅 ${formatted.dateLabel}
+⏰ ${formatted.timeLabel}
 
-This reminder will be sent once.`
+This reminder will be sent once.
+
+Reply:
+"change to 7 AM"
+or
+"change to 6 PM"
+
+to update the reminder.`
+}
+
+function reminderMatchesDate(reminder, dateEntity, now = new Date()) {
+  if (!dateEntity || !reminder.triggerAt) {
+    return true
+  }
+
+  const target = resolveTriggerAt(dateEntity, now)
+  return getIstDateKey(new Date(reminder.triggerAt)) === getIstDateKey(target)
+}
+
+function formatManualReminderSummary(reminder, now = new Date()) {
+  return `• ${reminder.message} — ${formatReminderListTime(reminder.triggerAt, now)}`
+}
+
+function recurrenceLabel(recurrence) {
+  if (recurrence === 'monthly') {
+    return 'month'
+  }
+
+  if (recurrence === 'yearly') {
+    return 'year'
+  }
+
+  return recurrence
+}
+
+function subscriptionToReminderDate(subscription) {
+  const renewalDate = computeNextRenewalDate({
+    renewal_day: subscription.renewalDay,
+    renewal_month: subscription.renewalMonth,
+    recurrence: subscription.recurrence
+  })
+
+  if (!renewalDate) {
+    return null
+  }
+
+  const reminderDate = addDays(
+    renewalDate,
+    -(subscription.reminderDaysBefore || 1)
+  )
+  reminderDate.setUTCHours(4, 30, 0, 0)
+
+  return reminderDate
+}
+
+function formatSubscriptionReminderDetail(subscription, now = new Date()) {
+  const reminderDate = subscriptionToReminderDate(subscription)
+  const reminderTime = reminderDate
+    ? formatReminderListTime(reminderDate, now)
+    : 'Not scheduled'
+
+  return `📺 ${subscription.serviceName}
+
+💰 ₹${subscription.amount}/${recurrenceLabel(subscription.recurrence)}
+📅 Renewal day: ${subscription.renewalDay}
+🔔 Reminder: ${subscription.reminderDaysBefore || 1} day before renewal
+⏰ Next reminder: ${reminderTime} IST
+✅ Status: ${subscription.active ? 'Active' : 'Inactive'}`
+}
+
+function formatSubscriptionReminderSummary(subscription, now = new Date()) {
+  const reminderDate = subscriptionToReminderDate(subscription)
+
+  if (!reminderDate) {
+    return null
+  }
+
+  return `• ${subscription.serviceName} renewal — ${formatReminderListTime(reminderDate, now)}`
 }
 
 async function generate(req, res, next) {
@@ -133,21 +224,72 @@ async function handleReminderCreateIntent(sender, text, intent) {
 }
 
 async function handleReminderQueryIntent(sender, intent) {
-  const reminders = await getUserReminders(sender, {
+  const now = new Date()
+  const serviceName = intent.entities.serviceName?.toLowerCase()
+  const manualReminders = await getUserReminders(sender, {
     serviceName: intent.entities.serviceName,
-    limit: 5
+    status: 'pending',
+    limit: 50
   })
+  const filteredManualReminders = manualReminders.filter((reminder) =>
+    reminderMatchesDate(reminder, intent.entities.date, now)
+  )
+  const subscriptions = await getUserSubscriptions(sender)
+  const filteredSubscriptions = serviceName
+    ? subscriptions.filter((subscription) =>
+        subscription.serviceName.toLowerCase().includes(serviceName)
+      )
+    : subscriptions
 
-  const body = reminders.length
-    ? reminders.map(formatReminder).join('\n')
+  if (serviceName && filteredSubscriptions.length) {
+    const reply = await sendWhatsAppMessage(
+      sender,
+      formatSubscriptionReminderDetail(filteredSubscriptions[0], now)
+    )
+
+    return {
+      ok: true,
+      intent: intent.intent,
+      reminders: filteredManualReminders,
+      subscriptions: filteredSubscriptions,
+      replySent: reply.success
+    }
+  }
+
+  const subscriptionSummaries = filteredSubscriptions
+    .map((subscription) => formatSubscriptionReminderSummary(subscription, now))
+    .filter(Boolean)
+    .filter((line) => {
+      if (!intent.entities.date) {
+        return true
+      }
+
+      const reminderDate = subscriptionToReminderDate(
+        filteredSubscriptions.find((subscription) =>
+          line.includes(subscription.serviceName)
+        )
+      )
+      return getIstDateKey(reminderDate) === getIstDateKey(resolveTriggerAt(intent.entities.date, now))
+    })
+  const manualSummaries = filteredManualReminders.map((reminder) =>
+    formatManualReminderSummary(reminder, now)
+  )
+  const summaries = [...manualSummaries, ...subscriptionSummaries]
+  const title = intent.entities.date?.value === 'tomorrow'
+    ? `🔎 Tomorrow's reminders`
+    : '🔎 Active reminders'
+
+  const body = summaries.length
+    ? summaries.join('\n')
     : 'No reminders found.'
 
-  const reply = await sendWhatsAppMessage(sender, `🔎 Reminders\n\n${body}`)
+  const reply = await sendWhatsAppMessage(sender, `${title}\n\n${body}`)
 
   return {
     ok: true,
     intent: intent.intent,
-    reminders,
+    reminders: filteredManualReminders,
+    subscriptions: filteredSubscriptions,
     replySent: reply.success
   }
 }
@@ -159,5 +301,6 @@ module.exports = {
   handleReminderCreateIntent,
   handleReminderQueryIntent,
   formatReminderTime,
-  formatReminderConfirmation
+  formatReminderConfirmation,
+  formatReminderListTime
 }

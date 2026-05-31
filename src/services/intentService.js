@@ -10,6 +10,8 @@ const INTENTS = {
 
 const MONTH_PATTERN =
   '(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)'
+const WEEKDAY_PATTERN =
+  '(sunday|monday|tuesday|wednesday|thursday|friday|saturday)'
 
 function normalizeText(text) {
   return String(text || '')
@@ -32,7 +34,9 @@ function cleanEntity(value) {
 
   const cleaned = String(value)
     .replace(/\b(?:subscription|reminder|renewal|existing|about|for|please|my|the|a|an|to|on|tomorrow|today)\b/gi, ' ')
+    .replace(/\b(?:morning|afternoon|evening|at|next|week|month|sunday|monday|tuesday|wednesday|thursday|friday|saturday|january|february|march|april|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\b/gi, ' ')
     .replace(/\b(?:what|which|show|list|tell|me|do|i|have|renews?)\b/gi, ' ')
+    .replace(/\b\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b/gi, ' ')
     .replace(/[^a-z0-9+.\s-]/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim()
@@ -72,15 +76,110 @@ function extractAmount(text) {
   return amountMatch ? Number(amountMatch[1]) : null
 }
 
-function extractDate(text) {
+function extractTime(text) {
+  const meridiemMatch = text.match(/\b(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i)
+
+  if (meridiemMatch) {
+    let hour = Number(meridiemMatch[1])
+    const minute = Number(meridiemMatch[2] || 0)
+    const meridiem = meridiemMatch[3].toLowerCase()
+
+    if (meridiem === 'pm' && hour < 12) {
+      hour += 12
+    }
+    if (meridiem === 'am' && hour === 12) {
+      hour = 0
+    }
+
+    return { hour, minute, source: 'explicit' }
+  }
+
+  const hourOnlyMatch = text.match(/\bat\s+(\d{1,2})(?!\d|:)/i)
+
+  if (hourOnlyMatch) {
+    return {
+      hour: Number(hourOnlyMatch[1]),
+      minute: 0,
+      source: 'explicit'
+    }
+  }
+
+  return null
+}
+
+function extractPeriod(text) {
   const lower = text.toLowerCase()
 
+  if (/\bmorning\b/.test(lower)) {
+    return 'morning'
+  }
+  if (/\bafternoon\b/.test(lower)) {
+    return 'afternoon'
+  }
+  if (/\bevening\b/.test(lower)) {
+    return 'evening'
+  }
+
+  return null
+}
+
+function extractDate(text) {
+  const lower = text.toLowerCase()
+  const time = extractTime(text)
+  const period = extractPeriod(text)
+
   if (/\btomorrow\b/.test(lower)) {
-    return { kind: 'relative', value: 'tomorrow' }
+    return {
+      kind: 'relative',
+      value: 'tomorrow',
+      ...(period ? { period } : {}),
+      ...(time ? { time } : {})
+    }
   }
 
   if (/\btoday\b/.test(lower)) {
-    return { kind: 'relative', value: 'today' }
+    return {
+      kind: 'relative',
+      value: 'today',
+      ...(period ? { period } : {}),
+      ...(time ? { time } : {})
+    }
+  }
+
+  if (/\bnext week\b/.test(lower)) {
+    return {
+      kind: 'relative',
+      value: 'next_week',
+      ...(time ? { time } : {})
+    }
+  }
+
+  if (/\bnext month\b/.test(lower)) {
+    return {
+      kind: 'relative',
+      value: 'next_month',
+      ...(time ? { time } : {})
+    }
+  }
+
+  const nextWeekday = text.match(new RegExp(`\\bnext\\s+${WEEKDAY_PATTERN}\\b`, 'i'))
+
+  if (nextWeekday) {
+    return {
+      kind: 'weekday',
+      value: nextWeekday[1].toLowerCase(),
+      ...(time ? { time } : {})
+    }
+  }
+
+  const weekday = text.match(new RegExp(`\\b${WEEKDAY_PATTERN}\\b`, 'i'))
+
+  if (weekday) {
+    return {
+      kind: 'weekday',
+      value: weekday[1].toLowerCase(),
+      ...(time ? { time } : {})
+    }
   }
 
   const monthDay = text.match(new RegExp(`\\b${MONTH_PATTERN}\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b`, 'i'))
@@ -89,7 +188,8 @@ function extractDate(text) {
     return {
       kind: 'month_day',
       month: monthDay[1],
-      day: Number(monthDay[2])
+      day: Number(monthDay[2]),
+      ...(time ? { time } : {})
     }
   }
 
@@ -98,7 +198,8 @@ function extractDate(text) {
   if (dayOnly) {
     return {
       kind: 'day',
-      day: Number(dayOnly[1])
+      day: Number(dayOnly[1]),
+      ...(time ? { time } : {})
     }
   }
 

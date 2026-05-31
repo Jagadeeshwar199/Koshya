@@ -19,6 +19,22 @@ const MONTH_INDEX = {
   nov: 10,
   dec: 11
 }
+const WEEKDAY_INDEX = {
+  sunday: 0,
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6
+}
+const IST_OFFSET_MINUTES = 330
+const DEFAULT_REMINDER_TIMES = {
+  default: { hour: 10, minute: 0 },
+  morning: { hour: 10, minute: 0 },
+  afternoon: { hour: 14, minute: 0 },
+  evening: { hour: 18, minute: 0 }
+}
 
 function startOfDay(date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate())
@@ -28,6 +44,48 @@ function addDays(date, days) {
   const next = new Date(date)
   next.setDate(next.getDate() + days)
   return next
+}
+
+function addMonthsToParts(parts, months) {
+  const monthIndex = parts.month + months
+  const year = parts.year + Math.floor(monthIndex / 12)
+  const month = ((monthIndex % 12) + 12) % 12
+  const day = Math.min(parts.day, daysInMonth(year, month))
+
+  return {
+    ...parts,
+    year,
+    month,
+    day
+  }
+}
+
+function getIstPartsFromDate(date) {
+  const istDate = new Date(date.getTime() + IST_OFFSET_MINUTES * 60 * 1000)
+
+  return {
+    year: istDate.getUTCFullYear(),
+    month: istDate.getUTCMonth(),
+    day: istDate.getUTCDate(),
+    hour: istDate.getUTCHours(),
+    minute: istDate.getUTCMinutes(),
+    weekday: istDate.getUTCDay()
+  }
+}
+
+function dateFromIstParts(parts) {
+  return new Date(
+    Date.UTC(
+      parts.year,
+      parts.month,
+      parts.day,
+      parts.hour,
+      parts.minute,
+      0,
+      0
+    ) -
+      IST_OFFSET_MINUTES * 60 * 1000
+  )
 }
 
 function daysInMonth(year, monthIndex) {
@@ -46,6 +104,17 @@ function parseMonth(monthStr) {
 
   const key = String(monthStr).toLowerCase().slice(0, 3)
   return MONTH_INDEX[key] ?? null
+}
+
+function getReminderTime(dateEntity = {}) {
+  if (dateEntity.time) {
+    return {
+      hour: dateEntity.time.hour,
+      minute: dateEntity.time.minute || 0
+    }
+  }
+
+  return DEFAULT_REMINDER_TIMES[dateEntity.period] || DEFAULT_REMINDER_TIMES.default
 }
 
 function parseRecurrenceMonths(recurrence) {
@@ -220,45 +289,99 @@ function mapReminderRow(row) {
 }
 
 function resolveTriggerAt(dateEntity, now = new Date()) {
+  const nowParts = getIstPartsFromDate(now)
+  const reminderTime = getReminderTime(dateEntity)
+  let targetParts = {
+    ...nowParts,
+    hour: reminderTime.hour,
+    minute: reminderTime.minute
+  }
+
   if (!dateEntity) {
-    return now
+    const todayDefault = dateFromIstParts(targetParts)
+    return todayDefault > now
+      ? todayDefault
+      : dateFromIstParts({ ...targetParts, day: targetParts.day + 1 })
   }
 
   if (dateEntity.kind === 'relative' && dateEntity.value === 'tomorrow') {
-    return addDays(now, 1)
+    return dateFromIstParts({ ...targetParts, day: targetParts.day + 1 })
   }
 
   if (dateEntity.kind === 'relative' && dateEntity.value === 'today') {
-    return now
+    const today = dateFromIstParts(targetParts)
+    return today > now
+      ? today
+      : dateFromIstParts({ ...targetParts, day: targetParts.day + 1 })
+  }
+
+  if (dateEntity.kind === 'relative' && dateEntity.value === 'next_week') {
+    return dateFromIstParts({ ...targetParts, day: targetParts.day + 7 })
+  }
+
+  if (dateEntity.kind === 'relative' && dateEntity.value === 'next_month') {
+    return dateFromIstParts(addMonthsToParts(targetParts, 1))
+  }
+
+  if (dateEntity.kind === 'weekday') {
+    const weekdayIndex = WEEKDAY_INDEX[dateEntity.value]
+
+    if (weekdayIndex === undefined) {
+      return dateFromIstParts(targetParts)
+    }
+
+    let daysUntil = (weekdayIndex - nowParts.weekday + 7) % 7
+
+    if (daysUntil === 0) {
+      daysUntil = 7
+    }
+
+    return dateFromIstParts({ ...targetParts, day: targetParts.day + daysUntil })
   }
 
   if (dateEntity.kind === 'month_day') {
     const monthIndex = parseMonth(dateEntity.month)
 
     if (monthIndex === null) {
-      return now
+      return dateFromIstParts(targetParts)
     }
 
-    let candidate = buildDate(now.getFullYear(), monthIndex, dateEntity.day)
+    let candidate = dateFromIstParts({
+      ...targetParts,
+      month: monthIndex,
+      day: dateEntity.day
+    })
 
-    if (candidate < startOfDay(now)) {
-      candidate = buildDate(now.getFullYear() + 1, monthIndex, dateEntity.day)
+    if (candidate < now) {
+      candidate = dateFromIstParts({
+        ...targetParts,
+        year: targetParts.year + 1,
+        month: monthIndex,
+        day: dateEntity.day
+      })
     }
 
     return candidate
   }
 
   if (dateEntity.kind === 'day') {
-    let candidate = buildDate(now.getFullYear(), now.getMonth(), dateEntity.day)
+    let candidate = dateFromIstParts({
+      ...targetParts,
+      day: dateEntity.day
+    })
 
-    if (candidate < startOfDay(now)) {
-      candidate = buildDate(now.getFullYear(), now.getMonth() + 1, dateEntity.day)
+    if (candidate < now) {
+      const nextMonth = addMonthsToParts(targetParts, 1)
+      candidate = dateFromIstParts({
+        ...nextMonth,
+        day: dateEntity.day
+      })
     }
 
     return candidate
   }
 
-  return now
+  return dateFromIstParts(targetParts)
 }
 
 function cleanReminderSubject(message, serviceName) {
@@ -267,7 +390,8 @@ function cleanReminderSubject(message, serviceName) {
   }
 
   return String(message || '')
-    .replace(/\b(?:remind me|create a reminder|set a reminder|add a reminder|tomorrow|today|about|for|to)\b/gi, ' ')
+    .replace(/\b(?:remind me|create a reminder|set a reminder|add a reminder|tomorrow|today|about|for|to|at|morning|afternoon|evening|next|week|month|sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/gi, ' ')
+    .replace(/\b\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim() || 'Reminder'
 }
@@ -467,5 +591,8 @@ module.exports = {
   markReminderSent,
   computeNextRenewalDate,
   computeReminderRenewalDate,
+  resolveTriggerAt,
+  dateFromIstParts,
+  getIstPartsFromDate,
   mapReminderRow
 }
