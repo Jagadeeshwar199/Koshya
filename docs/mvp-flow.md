@@ -4,7 +4,11 @@
 flowchart TD
   A[WhatsApp user] --> B[POST /webhook]
   B --> C[handleWebhook]
-  C --> D[parseMessage]
+  C --> X[detectIntent]
+  X --> Y[routeWhatsAppMessage]
+  Y --> D[parseMessage only for SUBSCRIPTION_CREATE]
+  Y --> Q[queryController]
+  Y --> R[reminderController]
   D --> E[createSubscription]
   E --> F[(subscriptions)]
   E --> G[sendWhatsAppMessage confirmation]
@@ -21,7 +25,9 @@ flowchart TD
 | Step | File | Function | Route/Cron | Dependencies | Tables |
 | --- | --- | --- | --- | --- | --- |
 | Webhook entry | `routes/webhookRoutes.js` | router | `POST /webhook` | Express | none |
-| Webhook controller | `controllers/webhookController.js` | `handleWebhook` | `POST /webhook` | Supabase, `handleSubscriptionMessage`, `sendWhatsAppMessage` | `messages` |
+| Webhook controller | `controllers/webhookController.js` | `handleWebhook` | `POST /webhook` | Supabase, `routeWhatsAppMessage` | `messages` |
+| Intent detection | `src/services/intentService.js` | `detectIntent` | Before all WhatsApp text routing | Rule-based intent patterns | none |
+| Intent router | `src/services/messageRouterService.js` | `routeWhatsAppMessage` | Webhook text flow | Intent service, query/reminder/subscription handlers | depends on intent |
 | Parser | `services/parserService.js` | `parseMessage` | Webhook and `POST /api/parse` | Regex parser helpers | none |
 | API parser wrapper | `src/services/parserService.js` | `parseSubscriptionMessage` | `POST /api/parse` | Existing parser, `ApiError` | none |
 | Subscription flow | `services/subscriptionFlowService.js` | `handleSubscriptionMessage`, `saveAndReply` | Webhook | Parser, pending state, WhatsApp sender | `messages`, `subscriptions` |
@@ -32,6 +38,16 @@ flowchart TD
 | Reminder cron | `services/reminderWorker.js` | `runSafely` | `0 9,21 * * *` by default | `node-cron`, `runReminderJob` | none |
 | Reminder job | `services/reminderJobService.js` | `runReminderJob`, `processQueuedReminders` | Startup catch-up and cron | Supabase, reminder generation, WhatsApp sender | `subscriptions`, `reminders` |
 | WhatsApp delivery | `services/whatsappService.js` | `sendWhatsAppMessage` | Webhook replies and reminder job | Gupshup WhatsApp API | none |
+
+## Intent routing impact
+
+WhatsApp text messages now run through `intentService.detectIntent()` before parser execution. Only `SUBSCRIPTION_CREATE` reaches `services/subscriptionFlowService.js`; reminder queries, reminder creation, subscription queries, updates, help, and unknown messages are handled before the subscription parser can create drafts or records.
+
+Bug guardrails:
+
+- `Netflix renewal tomorrow` routes to `REMINDER_QUERY`.
+- `Tell me about an existing Netflix reminder` routes to `REMINDER_QUERY`.
+- `What renews tomorrow?` routes to `REMINDER_QUERY`.
 
 ## API documentation
 

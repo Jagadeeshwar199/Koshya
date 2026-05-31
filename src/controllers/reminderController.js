@@ -1,8 +1,15 @@
 const {
   generateReminders,
+  createReminderFromIntent,
   getPendingReminders,
+  getUserReminders,
   markReminderSent
 } = require('../services/reminderService')
+const { sendWhatsAppMessage } = require('../../services/whatsappService')
+
+function formatReminder(reminder) {
+  return `• ${reminder.message} (${reminder.status}, ${reminder.triggerAt || 'no date'})`
+}
 
 async function generate(req, res, next) {
   try {
@@ -40,8 +47,50 @@ async function sent(req, res, next) {
   }
 }
 
+async function handleReminderCreateIntent(sender, text, intent) {
+  const reminder = await createReminderFromIntent({
+    userPhone: sender,
+    message: text,
+    entities: intent.entities
+  })
+
+  const reply = await sendWhatsAppMessage(
+    sender,
+    `✅ Reminder created\n\n${formatReminder(reminder)}`
+  )
+
+  return {
+    ok: true,
+    intent: intent.intent,
+    reminder,
+    replySent: reply.success
+  }
+}
+
+async function handleReminderQueryIntent(sender, intent) {
+  const reminders = await getUserReminders(sender, {
+    serviceName: intent.entities.serviceName,
+    limit: 5
+  })
+
+  const body = reminders.length
+    ? reminders.map(formatReminder).join('\n')
+    : 'No reminders found.'
+
+  const reply = await sendWhatsAppMessage(sender, `🔎 Reminders\n\n${body}`)
+
+  return {
+    ok: true,
+    intent: intent.intent,
+    reminders,
+    replySent: reply.success
+  }
+}
+
 module.exports = {
   generate,
   pending,
-  sent
+  sent,
+  handleReminderCreateIntent,
+  handleReminderQueryIntent
 }

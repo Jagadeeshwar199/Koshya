@@ -2,12 +2,8 @@ const supabase =
   require('../config/supabase')
 
 const {
-  handleSubscriptionMessage
-} = require('../services/subscriptionFlowService')
-
-const {
-  sendWhatsAppMessage
-} = require('../services/whatsappService')
+  routeWhatsAppMessage
+} = require('../src/services/messageRouterService')
 const logger = require('../utils/logger')
 
 /*
@@ -142,53 +138,14 @@ const handleWebhook = async (
 
     /*
     ========================================
-    HI FLOW
+    INTENT ROUTER
     ========================================
     */
 
-    const lowerText =
-      text.toLowerCase().trim()
-
-    if (
-      lowerText === 'hi' ||
-      lowerText === 'hello'
-    ) {
-
-      const reply = await sendWhatsAppMessage(
-
-        sender,
-
-`👋 Welcome to Koshya
-
-I help you remember subscription renewals.
-
-Send subscriptions like this:
-
-Netflix renews on 28th every month - 249
-
-JioHotstar renews on Jan 12 every 3 months - 599
-
-Prime renews on Jan 20 every year - 1499`
-
-      )
-
-      logger.info('webhook.welcome_reply', {
-        userPhone: sender,
-        replySent: reply.success
-      })
-
-      return res.sendStatus(200)
-    }
-
-    /*
-    ========================================
-    PARSE MESSAGE
-    ========================================
-    */
-
-    const result = await handleSubscriptionMessage(sender, text)
-    logger.info('webhook.subscription_flow_done', {
+    const result = await routeWhatsAppMessage(sender, text)
+    logger.info('webhook.intent_flow_done', {
       userPhone: sender,
+      intent: result?.intent,
       ok: result?.ok,
       replySent: result?.replySent
     })

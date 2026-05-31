@@ -219,6 +219,115 @@ function mapReminderRow(row) {
   }
 }
 
+function resolveTriggerAt(dateEntity, now = new Date()) {
+  if (!dateEntity) {
+    return now
+  }
+
+  if (dateEntity.kind === 'relative' && dateEntity.value === 'tomorrow') {
+    return addDays(now, 1)
+  }
+
+  if (dateEntity.kind === 'relative' && dateEntity.value === 'today') {
+    return now
+  }
+
+  if (dateEntity.kind === 'month_day') {
+    const monthIndex = parseMonth(dateEntity.month)
+
+    if (monthIndex === null) {
+      return now
+    }
+
+    let candidate = buildDate(now.getFullYear(), monthIndex, dateEntity.day)
+
+    if (candidate < startOfDay(now)) {
+      candidate = buildDate(now.getFullYear() + 1, monthIndex, dateEntity.day)
+    }
+
+    return candidate
+  }
+
+  if (dateEntity.kind === 'day') {
+    let candidate = buildDate(now.getFullYear(), now.getMonth(), dateEntity.day)
+
+    if (candidate < startOfDay(now)) {
+      candidate = buildDate(now.getFullYear(), now.getMonth() + 1, dateEntity.day)
+    }
+
+    return candidate
+  }
+
+  return now
+}
+
+function cleanReminderSubject(message, serviceName) {
+  if (serviceName) {
+    return serviceName
+  }
+
+  return String(message || '')
+    .replace(/\b(?:remind me|create a reminder|set a reminder|add a reminder|tomorrow|today|about|for|to)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim() || 'Reminder'
+}
+
+async function createReminderFromIntent({ userPhone, message, entities = {} }) {
+  if (!userPhone) {
+    throw new ApiError(400, 'userPhone is required')
+  }
+
+  const subject = cleanReminderSubject(message, entities.serviceName)
+  const triggerAt = resolveTriggerAt(entities.date)
+
+  const { data, error } = await supabase
+    .from('reminders')
+    .insert({
+      user_phone: userPhone,
+      message: subject,
+      status: 'pending',
+      trigger_at: triggerAt.toISOString(),
+      retry_count: 0
+    })
+    .select('*')
+    .maybeSingle()
+
+  if (error) {
+    throw new ApiError(502, 'failed to create reminder', formatSupabaseError(error))
+  }
+
+  return mapReminderRow(data)
+}
+
+async function getUserReminders(userPhone, options = {}) {
+  if (!userPhone) {
+    throw new ApiError(400, 'userPhone is required')
+  }
+
+  let query = supabase
+    .from('reminders')
+    .select('*')
+    .eq('user_phone', userPhone)
+    .order('trigger_at', { ascending: true })
+    .limit(options.limit || 10)
+
+  if (options.status) {
+    query = query.eq('status', options.status)
+  }
+
+  if (options.serviceName) {
+    query = query.ilike('message', `%${options.serviceName}%`)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    throw new ApiError(502, 'failed to fetch reminders', formatSupabaseError(error))
+  }
+
+  return (data || []).map(mapReminderRow)
+}
+
 async function reminderAlreadyQueued(reminder, dayStart, dayEnd) {
   let query = supabase
     .from('reminders')
@@ -352,7 +461,9 @@ async function markReminderSent(id) {
 
 module.exports = {
   generateReminders,
+  createReminderFromIntent,
   getPendingReminders,
+  getUserReminders,
   markReminderSent,
   computeNextRenewalDate,
   computeReminderRenewalDate,
