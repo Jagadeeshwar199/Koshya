@@ -431,8 +431,51 @@ function extractPartial(text) {
   }
 }
 
+function isDifferentService(nameA, nameB) {
+  if (!nameA || !nameB) {
+    return false
+  }
+
+  return nameA.toLowerCase() !== nameB.toLowerCase()
+}
+
+function isServiceSwitch(pending, fromText) {
+  if (!pending?.serviceName || !fromText.serviceName) {
+    return false
+  }
+
+  return isDifferentService(pending.serviceName, fromText.serviceName)
+}
+
 function mergeDraft(pending, text) {
   const fromText = extractPartial(text)
+
+  if (isServiceSwitch(pending, fromText)) {
+    const hasFollowUpFields = Boolean(
+      fromText.amount != null ||
+        fromText.recurrence ||
+        fromText.renewalDay != null ||
+        fromText.renewalMonth
+    )
+
+    if (!hasFollowUpFields) {
+      return {
+        serviceName: fromText.serviceName,
+        amount: null,
+        recurrence: null,
+        renewalDay: null,
+        renewalMonth: null
+      }
+    }
+
+    return {
+      serviceName: fromText.serviceName,
+      amount: fromText.amount ?? null,
+      recurrence: fromText.recurrence || null,
+      renewalDay: fromText.renewalDay ?? null,
+      renewalMonth: fromText.renewalMonth || null
+    }
+  }
 
   return {
     serviceName: pending.serviceName || fromText.serviceName || null,
@@ -451,6 +494,18 @@ function buildCombinedString(draft, text) {
   return text
 }
 
+function needsRenewalDate(recurrence) {
+  if (!recurrence) {
+    return false
+  }
+
+  if (recurrence === 'monthly') {
+    return true
+  }
+
+  return /^\d+\s+months?$/i.test(recurrence)
+}
+
 function getMissing(draft) {
   const missing = []
 
@@ -464,7 +519,7 @@ function getMissing(draft) {
     missing.push('recurrence')
   }
   if (
-    draft.recurrence === 'monthly' &&
+    needsRenewalDate(draft.recurrence) &&
     !draft.renewalDay &&
     !draft.renewalMonth
   ) {
@@ -472,6 +527,16 @@ function getMissing(draft) {
   }
 
   return missing
+}
+
+function finalizePatternMatch(parsed) {
+  return finalizeDraft({
+    serviceName: parsed.serviceName,
+    amount: parsed.amount,
+    recurrence: parsed.recurrence,
+    renewalDay: parsed.renewalDay ?? null,
+    renewalMonth: parsed.renewalMonth ?? null
+  })
 }
 
 function finalizeDraft(draft) {
@@ -517,13 +582,17 @@ function parseMessage(text, pending = null) {
   }
 
   if (pending) {
+    const fromText = extractPartial(normalized)
+    const switching = isServiceSwitch(pending, fromText)
     const combined = normalizeText(
-      buildCombinedString(pending, normalized)
+      switching && !fromText.amount && !fromText.recurrence
+        ? normalized
+        : buildCombinedString(pending, normalized)
     )
     const fromCombined = tryPatterns(combined)
 
     if (fromCombined) {
-      return fromCombined
+      return finalizePatternMatch(fromCombined)
     }
 
     return finalizeDraft(mergeDraft(pending, normalized))
@@ -532,7 +601,7 @@ function parseMessage(text, pending = null) {
   const patternResult = tryPatterns(normalized)
 
   if (patternResult) {
-    return patternResult
+    return finalizePatternMatch(patternResult)
   }
 
   const partial = extractPartial(normalized)
@@ -551,6 +620,33 @@ function mergePendingDrafts(existing, incoming) {
 
   if (!incoming) {
     return { ...existing }
+  }
+
+  if (isServiceSwitch(existing, incoming)) {
+    const hasFollowUpFields = Boolean(
+      incoming.amount != null ||
+        incoming.recurrence ||
+        incoming.renewalDay != null ||
+        incoming.renewalMonth
+    )
+
+    if (!hasFollowUpFields) {
+      return {
+        serviceName: incoming.serviceName,
+        amount: null,
+        recurrence: null,
+        renewalDay: null,
+        renewalMonth: null
+      }
+    }
+
+    return {
+      serviceName: incoming.serviceName,
+      amount: incoming.amount ?? null,
+      recurrence: incoming.recurrence || null,
+      renewalDay: incoming.renewalDay ?? null,
+      renewalMonth: incoming.renewalMonth || null
+    }
   }
 
   return {
