@@ -11,6 +11,71 @@ function formatReminder(reminder) {
   return `• ${reminder.message} (${reminder.status}, ${reminder.triggerAt || 'no date'})`
 }
 
+function getIstParts(date) {
+  const formatter = new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  })
+
+  return Object.fromEntries(
+    formatter.formatToParts(date).map((part) => [part.type, part.value])
+  )
+}
+
+function getIstDateKey(date) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  })
+
+  return formatter.format(date)
+}
+
+function addDays(date, days) {
+  const next = new Date(date)
+  next.setDate(next.getDate() + days)
+  return next
+}
+
+function formatReminderTime(triggerAt, now = new Date()) {
+  if (!triggerAt) {
+    return 'No delivery time set'
+  }
+
+  const triggerDate = new Date(triggerAt)
+  const parts = getIstParts(triggerDate)
+  const time = `${parts.hour}:${parts.minute} ${parts.dayPeriod.toUpperCase()} IST`
+  const triggerKey = getIstDateKey(triggerDate)
+  const todayKey = getIstDateKey(now)
+  const tomorrowKey = getIstDateKey(addDays(now, 1))
+
+  if (triggerKey === todayKey) {
+    return `Today at ${time}`
+  }
+
+  if (triggerKey === tomorrowKey) {
+    return `Tomorrow at ${time}`
+  }
+
+  return `${parts.day} ${parts.month} ${parts.year} at ${time}`
+}
+
+function formatReminderConfirmation(reminder, now = new Date()) {
+  return `✅ Reminder created
+
+${reminder.message}
+${formatReminderTime(reminder.triggerAt, now)}
+
+This reminder will be sent once.`
+}
+
 async function generate(req, res, next) {
   try {
     const result = await generateReminders(req.body || {})
@@ -56,7 +121,7 @@ async function handleReminderCreateIntent(sender, text, intent) {
 
   const reply = await sendWhatsAppMessage(
     sender,
-    `✅ Reminder created\n\n${formatReminder(reminder)}`
+    formatReminderConfirmation(reminder)
   )
 
   return {
@@ -92,5 +157,7 @@ module.exports = {
   pending,
   sent,
   handleReminderCreateIntent,
-  handleReminderQueryIntent
+  handleReminderQueryIntent,
+  formatReminderTime,
+  formatReminderConfirmation
 }
