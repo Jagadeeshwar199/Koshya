@@ -11,6 +11,7 @@ const {
   clearPending
 } = require('./pendingSubscriptionService')
 const { sendWhatsAppMessage } = require('./whatsappService')
+const logger = require('../utils/logger')
 
 function buildQuestions(missing) {
   const lines = []
@@ -54,7 +55,10 @@ async function saveAndReply(sender, parsed) {
   })
 
   if (!result.success) {
-    console.log('SUBSCRIPTION ERROR:', JSON.stringify(result.error, null, 2))
+    logger.error('subscription.save_failed', {
+      userPhone: sender,
+      error: result.error
+    })
     await sendWhatsAppMessage(
       sender,
       '❌ Failed to save subscription. Please try again.'
@@ -63,8 +67,28 @@ async function saveAndReply(sender, parsed) {
   }
 
   await clearPending(sender)
-  await sendWhatsAppMessage(sender, formatSaved(parsed))
-  return { ok: true }
+  const reply = await sendWhatsAppMessage(sender, formatSaved(parsed))
+
+  if (!reply.success) {
+    logger.warn('subscription.confirmation_failed', {
+      userPhone: sender,
+      subscriptionId: result.subscription?.id,
+      error: reply.error
+    })
+  }
+
+  logger.info('subscription.saved', {
+    userPhone: sender,
+    subscriptionId: result.subscription?.id,
+    serviceName: parsed.serviceName,
+    replySent: reply.success
+  })
+
+  return {
+    ok: true,
+    subscription: result.subscription,
+    replySent: reply.success
+  }
 }
 
 async function askForMissing(sender, draft) {
@@ -87,11 +111,19 @@ async function askForMissing(sender, draft) {
 async function handleSubscriptionMessage(sender, text) {
   const pending = await getPending(sender)
 
-  console.log('PENDING DRAFT:', JSON.stringify(pending))
+  logger.info('subscription.pending_loaded', {
+    userPhone: sender,
+    hasPending: Boolean(pending)
+  })
 
   const parsed = parseMessage(text, pending)
 
-  console.log('PARSED RESULT:', JSON.stringify(parsed, null, 2))
+  logger.info('subscription.message_parsed', {
+    userPhone: sender,
+    type: parsed.type,
+    success: parsed.success,
+    serviceName: parsed.serviceName || parsed.draft?.serviceName
+  })
 
   if (parsed.type === 'subscription' && parsed.success) {
     return saveAndReply(sender, parsed)

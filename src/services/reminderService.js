@@ -107,6 +107,62 @@ function computeNextRenewalDate(subscription, fromDate = new Date()) {
   return null
 }
 
+function withinCatchUpWindow(renewalDate, today, catchUpDays) {
+  return renewalDate < today && today <= startOfDay(addDays(renewalDate, catchUpDays))
+}
+
+function computeReminderRenewalDate(subscription, fromDate, catchUpDays) {
+  const day = Number(subscription.renewal_day)
+  const recurrence = String(subscription.recurrence || '').toLowerCase().trim()
+  const today = startOfDay(fromDate)
+
+  if (!Number.isInteger(day) || day < 1 || day > 31) {
+    return null
+  }
+
+  if (recurrence === 'monthly') {
+    const current = buildDate(today.getFullYear(), today.getMonth(), day)
+
+    if (withinCatchUpWindow(current, today, catchUpDays)) {
+      return current
+    }
+
+    return computeNextRenewalDate(subscription, fromDate)
+  }
+
+  const monthIndex = parseMonth(subscription.renewal_month)
+
+  if (recurrence === 'yearly' && monthIndex !== null) {
+    const current = buildDate(today.getFullYear(), monthIndex, day)
+
+    if (withinCatchUpWindow(current, today, catchUpDays)) {
+      return current
+    }
+
+    return computeNextRenewalDate(subscription, fromDate)
+  }
+
+  const recurrenceMonths = parseRecurrenceMonths(recurrence)
+
+  if (recurrenceMonths && monthIndex !== null) {
+    let previous = null
+    let candidate = buildDate(today.getFullYear(), monthIndex, day)
+
+    while (candidate < today) {
+      previous = candidate
+      candidate = addMonths(candidate, recurrenceMonths)
+    }
+
+    if (previous && withinCatchUpWindow(previous, today, catchUpDays)) {
+      return previous
+    }
+
+    return candidate
+  }
+
+  return null
+}
+
 function normalizeDaysAhead(daysAhead) {
   if (daysAhead === undefined || daysAhead === null) {
     return 1
@@ -116,6 +172,20 @@ function normalizeDaysAhead(daysAhead) {
 
   if (!Number.isInteger(parsed) || parsed < 0 || parsed > 30) {
     throw new ApiError(400, 'daysAhead must be an integer between 0 and 30')
+  }
+
+  return parsed
+}
+
+function normalizeCatchUpDays(catchUpDays) {
+  if (catchUpDays === undefined || catchUpDays === null) {
+    return Number(process.env.REMINDER_CATCH_UP_DAYS || 7)
+  }
+
+  const parsed = Number(catchUpDays)
+
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 30) {
+    throw new ApiError(400, 'catchUpDays must be an integer between 0 and 30')
   }
 
   return parsed
@@ -150,15 +220,22 @@ function mapReminderRow(row) {
 }
 
 async function reminderAlreadyQueued(reminder, dayStart, dayEnd) {
-  const { data, error } = await supabase
+  let query = supabase
     .from('reminders')
     .select('id')
-    .eq('user_phone', reminder.user_phone)
     .eq('message', reminder.message)
-    .in('status', ['pending', 'processing', 'sent'])
+    .in('status', ['pending', 'processing', 'sent', 'failed'])
     .gte('trigger_at', dayStart.toISOString())
     .lt('trigger_at', dayEnd.toISOString())
     .limit(1)
+
+  if (reminder.subscription_id) {
+    query = query.eq('subscription_id', reminder.subscription_id)
+  } else {
+    query = query.eq('user_phone', reminder.user_phone)
+  }
+
+  const { data, error } = await query
 
   if (error) {
     throw new ApiError(502, 'failed to check existing reminders', formatSupabaseError(error))
@@ -169,7 +246,8 @@ async function reminderAlreadyQueued(reminder, dayStart, dayEnd) {
 
 async function generateReminders(options = {}) {
   const daysAhead = normalizeDaysAhead(options.daysAhead)
-  const now = new Date()
+  const catchUpDays = normalizeCatchUpDays(options.catchUpDays)
+  const now = options.now ? new Date(options.now) : new Date()
   const today = startOfDay(now)
   const tomorrow = addDays(today, 1)
 
@@ -186,7 +264,7 @@ async function generateReminders(options = {}) {
   let skipped = 0
 
   for (const subscription of subscriptions || []) {
-    const renewalDate = computeNextRenewalDate(subscription, now)
+    const renewalDate = computeReminderRenewalDate(subscription, now, catchUpDays)
 
     if (!renewalDate) {
       skipped++
@@ -196,13 +274,15 @@ async function generateReminders(options = {}) {
     const reminderDaysBefore = Number(subscription.reminder_days_before ?? 1)
     const windowDays = Math.max(daysAhead, reminderDaysBefore)
     const windowEnd = startOfDay(addDays(today, windowDays))
+    const catchUpEnd = startOfDay(addDays(renewalDate, catchUpDays))
 
-    if (renewalDate < today || renewalDate > windowEnd) {
+    if (renewalDate > windowEnd || today > catchUpEnd) {
       skipped++
       continue
     }
 
     const reminder = {
+      subscription_id: subscription.id,
       user_phone: subscription.user_phone,
       message: buildReminderMessage(subscription, renewalDate),
       status: 'pending',
@@ -275,5 +355,6 @@ module.exports = {
   getPendingReminders,
   markReminderSent,
   computeNextRenewalDate,
+  computeReminderRenewalDate,
   mapReminderRow
 }

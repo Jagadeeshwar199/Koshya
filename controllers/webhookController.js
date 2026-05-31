@@ -8,6 +8,7 @@ const {
 const {
   sendWhatsAppMessage
 } = require('../services/whatsappService')
+const logger = require('../utils/logger')
 
 /*
 ========================================
@@ -44,14 +45,9 @@ const handleWebhook = async (
     ========================================
     */
 
-    console.log(
-      'FULL PAYLOAD:',
-      JSON.stringify(req.body, null, 2)
-    )
-
-    console.log('\n==============================')
-    console.log('NEW WHATSAPP MESSAGE')
-    console.log('==============================')
+    logger.info('webhook.received', {
+      hasEntry: Boolean(req.body?.entry?.length)
+    })
 
     const value =
       req.body.entry?.[0]
@@ -69,9 +65,9 @@ const handleWebhook = async (
 
     if (statusUpdate) {
 
-      console.log(
-        `📬 Status: ${statusUpdate.status}`
-      )
+      logger.info('webhook.status_event', {
+        status: statusUpdate.status
+      })
 
       return res.sendStatus(200)
     }
@@ -108,8 +104,18 @@ const handleWebhook = async (
       incomingMessage.text?.body || ''
     ).trim()
 
-    console.log('📱 Sender:', sender)
-    console.log('💬 Message:', text)
+    if (!sender || !text) {
+      logger.warn('webhook.invalid_text_message', {
+        hasSender: Boolean(sender),
+        hasText: Boolean(text)
+      })
+      return res.sendStatus(200)
+    }
+
+    logger.info('webhook.text_message', {
+      userPhone: sender,
+      messageLength: text.length
+    })
 
     /*
     ========================================
@@ -117,7 +123,7 @@ const handleWebhook = async (
     ========================================
     */
 
-    await supabase
+    const { error: messageError } = await supabase
       .from('messages')
       .insert([
         {
@@ -125,6 +131,14 @@ const handleWebhook = async (
           message: text
         }
       ])
+
+    if (messageError) {
+      logger.error('webhook.raw_message_save_failed', {
+        userPhone: sender,
+        error: messageError
+      })
+      return res.sendStatus(500)
+    }
 
     /*
     ========================================
@@ -140,7 +154,7 @@ const handleWebhook = async (
       lowerText === 'hello'
     ) {
 
-      await sendWhatsAppMessage(
+      const reply = await sendWhatsAppMessage(
 
         sender,
 
@@ -158,6 +172,11 @@ Prime renews on Jan 20 every year - 1499`
 
       )
 
+      logger.info('webhook.welcome_reply', {
+        userPhone: sender,
+        replySent: reply.success
+      })
+
       return res.sendStatus(200)
     }
 
@@ -167,15 +186,20 @@ Prime renews on Jan 20 every year - 1499`
     ========================================
     */
 
-    await handleSubscriptionMessage(sender, text)
+    const result = await handleSubscriptionMessage(sender, text)
+    logger.info('webhook.subscription_flow_done', {
+      userPhone: sender,
+      ok: result?.ok,
+      replySent: result?.replySent
+    })
     return res.sendStatus(200)
 
   } catch (err) {
 
-    console.error(
-      '❌ Webhook Error:',
-      err
-    )
+    logger.error('webhook.error', {
+      error: err.message,
+      stack: err.stack
+    })
 
     return res.sendStatus(500)
   }

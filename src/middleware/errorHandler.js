@@ -1,4 +1,5 @@
 const { isApiError } = require('../utils/apiError')
+const logger = require('../../utils/logger')
 
 function notFoundHandler(req, res) {
   res.status(404).json({
@@ -20,7 +21,12 @@ function errorHandler(err, req, res, next) {
     })
   }
 
-  console.error('API Error:', err)
+  logger.error('api.unhandled_error', {
+    method: req.method,
+    path: req.path,
+    error: err.message,
+    stack: err.stack
+  })
 
   return res.status(500).json({
     success: false,

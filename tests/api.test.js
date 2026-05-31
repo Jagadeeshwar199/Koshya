@@ -48,6 +48,17 @@ async function run() {
     assert.equal(parsed.body.serviceName, 'Netflix')
     assert.equal(parsed.body.amount, 149)
 
+    const customParsed = await request(baseUrl, '/api/parse', {
+      method: 'POST',
+      body: JSON.stringify({
+        message: 'JioHotstar renews on Apr 12 every 3 months - 599'
+      })
+    })
+
+    assert.equal(customParsed.status, 200)
+    assert.equal(customParsed.body.type, 'subscription')
+    assert.equal(customParsed.body.recurrence, '3 months')
+
     const invalidParse = await request(baseUrl, '/api/parse', {
       method: 'POST',
       body: JSON.stringify({
@@ -103,7 +114,7 @@ async function run() {
     assert.equal(notFound.status, 404)
     assert.equal(notFound.body.error, 'Route not found')
 
-    console.log('API route tests passed: 7')
+    console.log('API route tests passed: 8')
   } finally {
     await new Promise((resolve) => server.close(resolve))
   }

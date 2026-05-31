@@ -1,5 +1,6 @@
 const axios =
   require('axios')
+const logger = require('../utils/logger')
 
 async function sendWhatsAppMessage(
   phone,
@@ -8,7 +9,7 @@ async function sendWhatsAppMessage(
 
   try {
 
-    await axios.post(
+    const response = await axios.post(
 
       'https://api.gupshup.io/wa/api/v1/msg',
 
@@ -39,16 +40,30 @@ async function sendWhatsAppMessage(
       }
     )
 
-    console.log(
-      '✅ WhatsApp message sent'
-    )
+    logger.info('whatsapp.message_sent', {
+      destination: phone,
+      status: response.status
+    })
+
+    return {
+      success: true,
+      status: response.status,
+      data: response.data
+    }
 
   } catch (err) {
 
-    console.error(
-      '❌ WhatsApp Send Error:',
-      err.response?.data || err.message
-    )
+    const error = err.response?.data || err.message
+
+    logger.error('whatsapp.send_failed', {
+      destination: phone,
+      error
+    })
+
+    return {
+      success: false,
+      error
+    }
   }
 }
 

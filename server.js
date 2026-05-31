@@ -2,6 +2,7 @@ require('dotenv').config()
 
 const express = require('express')
 const cors = require('cors')
+const rateLimit = require('express-rate-limit')
 
 const webhookRoutes = require('./routes/webhookRoutes')
 const parseRoutes = require('./src/routes/parseRoutes')
@@ -13,11 +14,18 @@ const {
 } = require('./src/middleware/errorHandler')
 
 const app = express()
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: Number(process.env.API_RATE_LIMIT_PER_MINUTE || 120),
+  standardHeaders: true,
+  legacyHeaders: false
+})
 
 app.use(cors())
 app.use(express.json({ limit: '1mb' }))
 
 app.use('/', webhookRoutes)
+app.use('/api', apiLimiter)
 app.use('/api/parse', parseRoutes)
 app.use('/api/subscriptions', subscriptionRoutes)
 app.use('/api/reminders', reminderRoutes)
