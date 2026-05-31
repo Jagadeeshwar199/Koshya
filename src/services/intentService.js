@@ -1,0 +1,185 @@
+const INTENTS = {
+  SUBSCRIPTION_CREATE: 'SUBSCRIPTION_CREATE',
+  SUBSCRIPTION_UPDATE: 'SUBSCRIPTION_UPDATE',
+  SUBSCRIPTION_QUERY: 'SUBSCRIPTION_QUERY',
+  REMINDER_CREATE: 'REMINDER_CREATE',
+  REMINDER_QUERY: 'REMINDER_QUERY',
+  HELP: 'HELP',
+  UNKNOWN: 'UNKNOWN'
+}
+
+const MONTH_PATTERN =
+  '(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)'
+
+function normalizeText(text) {
+  return String(text || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+}
+
+function titleCase(value) {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+}
+
+function cleanEntity(value) {
+  if (!value) {
+    return null
+  }
+
+  const cleaned = String(value)
+    .replace(/\b(?:subscription|reminder|renewal|existing|about|for|please|my|the|a|an|to|on|tomorrow|today)\b/gi, ' ')
+    .replace(/\b(?:what|which|show|list|tell|me|do|i|have|renews?)\b/gi, ' ')
+    .replace(/[^a-z0-9+.\s-]/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (!cleaned || /^\d+$/.test(cleaned)) {
+    return null
+  }
+
+  return titleCase(cleaned)
+}
+
+function extractServiceName(text) {
+  const patterns = [
+    /\b(?:about|for)\s+([a-z0-9+.\s-]+?)\s+(?:subscription|reminder|renewal)\b/i,
+    /\b(?:change|update|edit|modify)\s+([a-z0-9+.\s-]+?)\s+(?:amount|renewal|date|subscription)\b/i,
+    /\b(?:remind me(?:\s+tomorrow)?\s+(?:about|to)?|create a reminder for|set a reminder for)\s+([a-z0-9+.\s-]+)/i,
+    /^([a-z0-9+.\s-]+?)\s+renews?\b/i,
+    /^add\s+([a-z0-9+.\s-]+?)(?:\s+subscription)?$/i,
+    /^([a-z0-9+.\s-]+?)\s+(?:monthly|yearly|every\s+\d+\s+months?)\b/i,
+    /^([a-z0-9+.\s-]+?)\s+renewal\b/i
+  ]
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern)
+    const serviceName = cleanEntity(match?.[1])
+
+    if (serviceName) {
+      return serviceName
+    }
+  }
+
+  return null
+}
+
+function extractAmount(text) {
+  const amountMatch = text.match(/(?:amount\s+to|to|₹|rs\.?|inr)?\s*(\d{2,})\b/i)
+  return amountMatch ? Number(amountMatch[1]) : null
+}
+
+function extractDate(text) {
+  const lower = text.toLowerCase()
+
+  if (/\btomorrow\b/.test(lower)) {
+    return { kind: 'relative', value: 'tomorrow' }
+  }
+
+  if (/\btoday\b/.test(lower)) {
+    return { kind: 'relative', value: 'today' }
+  }
+
+  const monthDay = text.match(new RegExp(`\\b${MONTH_PATTERN}\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b`, 'i'))
+
+  if (monthDay) {
+    return {
+      kind: 'month_day',
+      month: monthDay[1],
+      day: Number(monthDay[2])
+    }
+  }
+
+  const dayOnly = text.match(/\b(?:on|date)\s+(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?\b/i)
+
+  if (dayOnly) {
+    return {
+      kind: 'day',
+      day: Number(dayOnly[1])
+    }
+  }
+
+  return null
+}
+
+function buildResult(intent, confidence, text, extraEntities = {}) {
+  const serviceName = extractServiceName(text)
+  const date = extractDate(text)
+  const amount = extractAmount(text)
+
+  return {
+    intent,
+    confidence,
+    entities: {
+      ...(serviceName ? { serviceName } : {}),
+      ...(amount ? { amount } : {}),
+      ...(date ? { date } : {}),
+      ...extraEntities
+    }
+  }
+}
+
+function detectIntent(message) {
+  const text = normalizeText(message)
+  const lower = text.toLowerCase()
+
+  if (!text) {
+    return buildResult(INTENTS.UNKNOWN, 0, text)
+  }
+
+  if (/^(help|hi|hello|hi help|what can you do\??|commands|\?)$/i.test(text)) {
+    return buildResult(INTENTS.HELP, 0.99, text)
+  }
+
+  if (/\b(?:change|update|edit|modify)\b/.test(lower)) {
+    return buildResult(INTENTS.SUBSCRIPTION_UPDATE, 0.9, text)
+  }
+
+  if (
+    /\b(?:what|which|show|list|tell me|do i have|existing)\b/.test(lower) &&
+    /\b(?:reminder|reminders|renews?|renewal|renewals|due)\b/.test(lower)
+  ) {
+    return buildResult(INTENTS.REMINDER_QUERY, 0.94, text)
+  }
+
+  if (
+    /\b(?:renewal|renews?|due)\b/.test(lower) &&
+    /\b(?:today|tomorrow|this week|next week)\b/.test(lower) &&
+    !/\b(?:remind me|create|add|set)\b/.test(lower)
+  ) {
+    return buildResult(INTENTS.REMINDER_QUERY, 0.92, text)
+  }
+
+  if (/\b(?:remind me|create a reminder|set a reminder|add a reminder)\b/.test(lower)) {
+    return buildResult(INTENTS.REMINDER_CREATE, 0.93, text)
+  }
+
+  if (
+    /\b(?:show|list|tell me|what are|my)\b/.test(lower) &&
+    /\b(?:subscription|subscriptions)\b/.test(lower)
+  ) {
+    return buildResult(INTENTS.SUBSCRIPTION_QUERY, 0.92, text)
+  }
+
+  if (
+    /^add\s+.+\s+subscription$/i.test(text) ||
+    /\brenews?\s+(?:on|every)\b/i.test(text) ||
+    /\b(?:monthly|yearly|every\s+\d+\s+months?)\b/i.test(text) && /\b(?:\d{2,}|₹|rs\.?|inr)\b/i.test(text)
+  ) {
+    return buildResult(INTENTS.SUBSCRIPTION_CREATE, 0.9, text)
+  }
+
+  if (/^[a-z0-9+.\s-]+\s+subscription$/i.test(text)) {
+    return buildResult(INTENTS.SUBSCRIPTION_CREATE, 0.75, text)
+  }
+
+  return buildResult(INTENTS.UNKNOWN, 0.35, text)
+}
+
+module.exports = {
+  INTENTS,
+  detectIntent
+}
