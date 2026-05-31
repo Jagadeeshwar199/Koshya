@@ -98,6 +98,14 @@ function buildSubscriptionRecord(input) {
       input.recurrence
     )
 
+  const renewalMonth =
+    pickFirst(
+      parsed.renewalMonth,
+      parsed.renewal_month,
+      input.renewalMonth,
+      input.renewal_month
+    )
+
   const errors = []
 
   if (
@@ -153,13 +161,9 @@ function buildSubscriptionRecord(input) {
         renewalDay,
 
       renewal_month:
-        pickFirst(
-          parsed.renewalMonth,
-          parsed.renewal_month,
-          input.renewalMonth,
-          input.renewal_month,
-          null
-        ),
+        renewalMonth === undefined
+          ? null
+          : renewalMonth,
 
       recurrence:
         normalizeRecurrence(recurrence)
