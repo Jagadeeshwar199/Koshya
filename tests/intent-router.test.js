@@ -3,6 +3,7 @@ const assert = require('node:assert/strict')
 let subscriptionCalls = 0
 let reminderQueryCalls = 0
 let reminderCreateCalls = 0
+let reminderUpdateCalls = 0
 
 require.cache[require.resolve('../services/subscriptionFlowService')] = {
   exports: {
@@ -18,6 +19,10 @@ require.cache[require.resolve('../src/controllers/reminderController')] = {
     handleReminderCreateIntent: async () => {
       reminderCreateCalls++
       return { ok: true, intent: 'REMINDER_CREATE' }
+    },
+    handleReminderUpdateIntent: async () => {
+      reminderUpdateCalls++
+      return { ok: true, intent: 'REMINDER_UPDATE' }
     },
     handleReminderQueryIntent: async () => {
       reminderQueryCalls++
@@ -51,7 +56,10 @@ async function run() {
   await routeWhatsAppMessage('919999999999', 'Remind me tomorrow about Netflix')
   assert.equal(reminderCreateCalls, 1, 'reminder create should route to reminder handler')
 
-  console.log('Intent router tests passed: 5')
+  await routeWhatsAppMessage('919999999999', 'change to 9 AM')
+  assert.equal(reminderUpdateCalls, 1, 'reminder update should route to reminder update handler')
+
+  console.log('Intent router tests passed: 6')
 }
 
 run().catch((err) => {

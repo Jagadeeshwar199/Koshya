@@ -3,6 +3,7 @@ const INTENTS = {
   SUBSCRIPTION_UPDATE: 'SUBSCRIPTION_UPDATE',
   SUBSCRIPTION_QUERY: 'SUBSCRIPTION_QUERY',
   REMINDER_CREATE: 'REMINDER_CREATE',
+  REMINDER_UPDATE: 'REMINDER_UPDATE',
   REMINDER_QUERY: 'REMINDER_QUERY',
   HELP: 'HELP',
   UNKNOWN: 'UNKNOWN'
@@ -36,6 +37,14 @@ function isReminderQueryText(text) {
     /\b(?:tomorrow|tomorrows|upcoming)\b.*\b(?:reminder|reminders|renewal|renewals|subscription|subscriptions)\b/.test(text) ||
     /\b(?:reminder|reminders|renewal|renewals|subscription|subscriptions)\b.*\b(?:tomorrow|tomorrows|upcoming)\b/.test(text) ||
     /\bwhat\s+(?:renews|is due)\s+tomorrow\b/.test(text)
+}
+
+function isReminderUpdateText(text) {
+  return /\b(?:change|make|set|move|update)\b/.test(text) &&
+    (
+      /\b(?:reminder|it)\b/.test(text) ||
+      /\b(?:am|pm|morning|afternoon|evening|tomorrow|today|next\s+(?:week|month|sunday|monday|tuesday|wednesday|thursday|friday|saturday))\b/.test(text)
+    )
 }
 
 function titleCase(value) {
@@ -222,6 +231,13 @@ function extractDate(text) {
     }
   }
 
+  if (time) {
+    return {
+      kind: 'time_only',
+      time
+    }
+  }
+
   return null
 }
 
@@ -252,6 +268,10 @@ function detectIntent(message) {
 
   if (/^(help|hi|hello|hi help|what can you do\??|commands|\?)$/i.test(text)) {
     return buildResult(INTENTS.HELP, 0.99, text)
+  }
+
+  if (isReminderUpdateText(lower)) {
+    return buildResult(INTENTS.REMINDER_UPDATE, 0.93, text)
   }
 
   if (/\b(?:change|update|edit|modify)\b/.test(lower)) {

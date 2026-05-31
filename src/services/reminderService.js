@@ -315,6 +315,10 @@ function resolveTriggerAt(dateEntity, now = new Date()) {
       : dateFromIstParts({ ...targetParts, day: targetParts.day + 1 })
   }
 
+  if (dateEntity.kind === 'time_only') {
+    return dateFromIstParts(targetParts)
+  }
+
   if (dateEntity.kind === 'relative' && dateEntity.value === 'next_week') {
     return dateFromIstParts({ ...targetParts, day: targetParts.day + 7 })
   }
@@ -418,6 +422,55 @@ async function createReminderFromIntent({ userPhone, message, entities = {} }) {
 
   if (error) {
     throw new ApiError(502, 'failed to create reminder', formatSupabaseError(error))
+  }
+
+  return mapReminderRow(data)
+}
+
+async function getLatestActiveReminder(userPhone) {
+  if (!userPhone) {
+    throw new ApiError(400, 'userPhone is required')
+  }
+
+  const { data, error } = await supabase
+    .from('reminders')
+    .select('*')
+    .eq('user_phone', userPhone)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    throw new ApiError(502, 'failed to fetch latest reminder', formatSupabaseError(error))
+  }
+
+  return mapReminderRow(data)
+}
+
+async function updateLatestReminderFromIntent({ userPhone, entities = {} }) {
+  const reminder = await getLatestActiveReminder(userPhone)
+
+  if (!reminder) {
+    return null
+  }
+
+  const existingTriggerAt = reminder.triggerAt
+    ? new Date(reminder.triggerAt)
+    : new Date()
+  const triggerAt = resolveTriggerAt(entities.date, existingTriggerAt)
+
+  const { data, error } = await supabase
+    .from('reminders')
+    .update({
+      trigger_at: triggerAt.toISOString()
+    })
+    .eq('id', reminder.id)
+    .select('*')
+    .maybeSingle()
+
+  if (error) {
+    throw new ApiError(502, 'failed to update reminder', formatSupabaseError(error))
   }
 
   return mapReminderRow(data)
@@ -586,6 +639,7 @@ async function markReminderSent(id) {
 module.exports = {
   generateReminders,
   createReminderFromIntent,
+  updateLatestReminderFromIntent,
   getPendingReminders,
   getUserReminders,
   markReminderSent,
