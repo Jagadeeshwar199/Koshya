@@ -19,6 +19,25 @@ function normalizeText(text) {
     .replace(/\s+/g, ' ')
 }
 
+function normalizeForIntentMatch(text) {
+  return normalizeText(text)
+    .toLowerCase()
+    .replace(/['’]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function isReminderQueryText(text) {
+  return (
+    /\b(?:what|which|show|list|tell me|do i have|existing|my)\b/.test(text) &&
+      /\b(?:reminder|reminders|renews?|renewal|renewals|due)\b/.test(text)
+  ) ||
+    /\b(?:tomorrow|tomorrows|upcoming)\b.*\b(?:reminder|reminders|renewal|renewals|subscription|subscriptions)\b/.test(text) ||
+    /\b(?:reminder|reminders|renewal|renewals|subscription|subscriptions)\b.*\b(?:tomorrow|tomorrows|upcoming)\b/.test(text) ||
+    /\bwhat\s+(?:renews|is due)\s+tomorrow\b/.test(text)
+}
+
 function titleCase(value) {
   return value
     .split(/\s+/)
@@ -225,7 +244,7 @@ function buildResult(intent, confidence, text, extraEntities = {}) {
 
 function detectIntent(message) {
   const text = normalizeText(message)
-  const lower = text.toLowerCase()
+  const lower = normalizeForIntentMatch(text)
 
   if (!text) {
     return buildResult(INTENTS.UNKNOWN, 0, text)
@@ -239,10 +258,7 @@ function detectIntent(message) {
     return buildResult(INTENTS.SUBSCRIPTION_UPDATE, 0.9, text)
   }
 
-  if (
-    /\b(?:what|which|show|list|tell me|do i have|existing)\b/.test(lower) &&
-    /\b(?:reminder|reminders|renews?|renewal|renewals|due)\b/.test(lower)
-  ) {
+  if (isReminderQueryText(lower)) {
     return buildResult(INTENTS.REMINDER_QUERY, 0.94, text)
   }
 
