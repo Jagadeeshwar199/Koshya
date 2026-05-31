@@ -1,28 +1,26 @@
 require('dotenv').config()
 
-const express =
-  require('express')
+const express = require('express')
+const cors = require('cors')
 
-const webhookRoutes =
-  require('./routes/webhookRoutes')
-
+const webhookRoutes = require('./routes/webhookRoutes')
+const parseRoutes = require('./src/routes/parseRoutes')
+const subscriptionRoutes = require('./src/routes/subscriptionRoutes')
+const reminderRoutes = require('./src/routes/reminderRoutes')
 const {
-  startScheduler
-} = require('./services/schedulerService')
-
-/*
-========================================
-START REMINDER WORKER
-========================================
-*/
-
-require('./services/reminderWorker')
+  notFoundHandler,
+  errorHandler
+} = require('./src/middleware/errorHandler')
 
 const app = express()
 
-app.use(express.json())
+app.use(cors())
+app.use(express.json({ limit: '1mb' }))
 
 app.use('/', webhookRoutes)
+app.use('/api/parse', parseRoutes)
+app.use('/api/subscriptions', subscriptionRoutes)
+app.use('/api/reminders', reminderRoutes)
 
 /*
 ========================================
@@ -56,11 +54,12 @@ app.get('/health', (req, res) => {
 
 /*
 ========================================
-START SCHEDULER
+ERROR HANDLING
 ========================================
 */
 
-startScheduler()
+app.use(notFoundHandler)
+app.use(errorHandler)
 
 /*
 ========================================
@@ -68,13 +67,28 @@ START SERVER
 ========================================
 */
 
-const PORT =
-  process.env.PORT || 3000
+function start() {
+  const {
+    startScheduler
+  } = require('./services/schedulerService')
 
-app.listen(PORT, () => {
+  startScheduler()
 
-  console.log(
-    `🚀 Koshya running on ${PORT}`
-  )
+  const PORT =
+    process.env.PORT || 3000
 
-})
+  return app.listen(PORT, () => {
+
+    console.log(
+      `🚀 Koshya running on ${PORT}`
+    )
+
+  })
+}
+
+if (require.main === module) {
+  start()
+}
+
+module.exports = app
+module.exports.start = start

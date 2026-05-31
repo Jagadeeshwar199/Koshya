@@ -1,0 +1,34 @@
+const { isApiError } = require('../utils/apiError')
+
+function notFoundHandler(req, res) {
+  res.status(404).json({
+    success: false,
+    error: 'Route not found'
+  })
+}
+
+function errorHandler(err, req, res, next) {
+  if (res.headersSent) {
+    return next(err)
+  }
+
+  if (isApiError(err)) {
+    return res.status(err.statusCode).json({
+      success: false,
+      error: err.message,
+      details: err.details
+    })
+  }
+
+  console.error('API Error:', err)
+
+  return res.status(500).json({
+    success: false,
+    error: 'Internal server error'
+  })
+}
+
+module.exports = {
+  notFoundHandler,
+  errorHandler
+}
