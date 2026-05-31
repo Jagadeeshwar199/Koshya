@@ -1,6 +1,36 @@
 const supabase =
   require('../config/supabase')
 
+function normalizeRecurrence(recurrence) {
+  if (!recurrence) {
+    return recurrence
+  }
+
+  const lower = String(recurrence).toLowerCase().trim()
+
+  if (lower === 'monthly' || lower === 'yearly') {
+    return lower
+  }
+
+  const monthsMatch = lower.match(/^(\d+)\s+months?$/)
+
+  if (monthsMatch) {
+    const months = Number(monthsMatch[1])
+
+    if (months === 3) {
+      return 'yearly'
+    }
+
+    if (months >= 6) {
+      return 'yearly'
+    }
+
+    return 'monthly'
+  }
+
+  return lower
+}
+
 async function createSubscription({
 
   userPhone,
@@ -38,7 +68,7 @@ async function createSubscription({
           renewalMonth,
 
         recurrence:
-          recurrence
+          normalizeRecurrence(recurrence)
       }])
 
     if (error) {
