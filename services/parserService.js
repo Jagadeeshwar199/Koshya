@@ -431,8 +431,51 @@ function extractPartial(text) {
   }
 }
 
+function isDifferentService(nameA, nameB) {
+  if (!nameA || !nameB) {
+    return false
+  }
+
+  return nameA.toLowerCase() !== nameB.toLowerCase()
+}
+
+function isServiceSwitch(pending, fromText) {
+  if (!pending?.serviceName || !fromText.serviceName) {
+    return false
+  }
+
+  return isDifferentService(pending.serviceName, fromText.serviceName)
+}
+
 function mergeDraft(pending, text) {
   const fromText = extractPartial(text)
+
+  if (isServiceSwitch(pending, fromText)) {
+    const hasFollowUpFields = Boolean(
+      fromText.amount != null ||
+        fromText.recurrence ||
+        fromText.renewalDay != null ||
+        fromText.renewalMonth
+    )
+
+    if (!hasFollowUpFields) {
+      return {
+        serviceName: fromText.serviceName,
+        amount: null,
+        recurrence: null,
+        renewalDay: null,
+        renewalMonth: null
+      }
+    }
+
+    return {
+      serviceName: fromText.serviceName,
+      amount: fromText.amount ?? null,
+      recurrence: fromText.recurrence || null,
+      renewalDay: fromText.renewalDay ?? null,
+      renewalMonth: fromText.renewalMonth || null
+    }
+  }
 
   return {
     serviceName: pending.serviceName || fromText.serviceName || null,
@@ -539,8 +582,12 @@ function parseMessage(text, pending = null) {
   }
 
   if (pending) {
+    const fromText = extractPartial(normalized)
+    const switching = isServiceSwitch(pending, fromText)
     const combined = normalizeText(
-      buildCombinedString(pending, normalized)
+      switching && !fromText.amount && !fromText.recurrence
+        ? normalized
+        : buildCombinedString(pending, normalized)
     )
     const fromCombined = tryPatterns(combined)
 
@@ -573,6 +620,33 @@ function mergePendingDrafts(existing, incoming) {
 
   if (!incoming) {
     return { ...existing }
+  }
+
+  if (isServiceSwitch(existing, incoming)) {
+    const hasFollowUpFields = Boolean(
+      incoming.amount != null ||
+        incoming.recurrence ||
+        incoming.renewalDay != null ||
+        incoming.renewalMonth
+    )
+
+    if (!hasFollowUpFields) {
+      return {
+        serviceName: incoming.serviceName,
+        amount: null,
+        recurrence: null,
+        renewalDay: null,
+        renewalMonth: null
+      }
+    }
+
+    return {
+      serviceName: incoming.serviceName,
+      amount: incoming.amount ?? null,
+      recurrence: incoming.recurrence || null,
+      renewalDay: incoming.renewalDay ?? null,
+      renewalMonth: incoming.renewalMonth || null
+    }
   }
 
   return {

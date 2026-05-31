@@ -44,4 +44,21 @@ const followUp = parseMessage('149 monthly on 27th', {
 assert.equal(followUp.type, 'subscription', 'follow-up should complete')
 assert.equal(followUp.renewalDay, 27)
 
-console.log('Parser tests passed:', shouldSave.length + shouldAsk.length + 1)
+const netflixPending = {
+  serviceName: 'Netflix',
+  amount: null,
+  recurrence: null,
+  renewalDay: null,
+  renewalMonth: null
+}
+const switched = parseMessage('prime', netflixPending)
+assert.equal(switched.type, 'incomplete', 'service switch should stay incomplete')
+assert.equal(switched.draft.serviceName, 'Prime', 'should switch to Prime, not Netflix')
+
+const stillNetflix = parseMessage('149 monthly', netflixPending)
+assert.equal(stillNetflix.draft.serviceName, 'Netflix', 'amount follow-up keeps pending service')
+
+console.log(
+  'Parser tests passed:',
+  shouldSave.length + shouldAsk.length + 1 + 2
+)
