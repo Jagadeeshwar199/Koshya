@@ -228,6 +228,7 @@ async function getUserSubscriptions(phone) {
     .from('subscriptions')
     .select('*')
     .eq('user_phone', userPhone)
+    .eq('active', true)
     .order('created_at', { ascending: false })
 
   if (error) {
