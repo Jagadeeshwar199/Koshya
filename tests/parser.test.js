@@ -58,10 +58,14 @@ const switched = parseMessage('prime', netflixPending)
 assert.equal(switched.type, 'incomplete', 'service switch should stay incomplete')
 assert.equal(switched.draft.serviceName, 'Prime', 'should switch to Prime, not Netflix')
 
+const completeSwitch = parseMessage('Prime 1499 yearly', netflixPending)
+assert.equal(completeSwitch.type, 'subscription', 'complete service switch should save')
+assert.equal(completeSwitch.serviceName, 'Prime', 'complete switch should not prefix pending service')
+
 const stillNetflix = parseMessage('149 monthly', netflixPending)
 assert.equal(stillNetflix.draft.serviceName, 'Netflix', 'amount follow-up keeps pending service')
 
 console.log(
   'Parser tests passed:',
-  shouldSave.length + shouldAsk.length + 1 + 2 + 1
+  shouldSave.length + shouldAsk.length + 1 + 2 + 1 + 2
 )

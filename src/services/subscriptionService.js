@@ -24,6 +24,12 @@ function formatSupabaseError(error) {
   }
 }
 
+function isActiveDuplicateError(error) {
+  const detail = `${error?.message || ''} ${error?.details || ''}`
+  return error?.code === '23505' &&
+    detail.includes('idx_subscriptions_active_unique')
+}
+
 function normalizePhone(phone) {
   if (typeof phone !== 'string') {
     throw new ApiError(400, 'userPhone must be a string')
@@ -181,6 +187,85 @@ function mapSubscriptionRow(row) {
   }
 }
 
+async function findActiveSubscriptionRowByService(userPhone, serviceName) {
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .select('*')
+    .eq('user_phone', userPhone)
+    .eq('active', true)
+
+  if (error) {
+    throw new ApiError(
+      502,
+      'failed to fetch existing subscription',
+      formatSupabaseError(error)
+    )
+  }
+
+  const normalizedServiceName = serviceName.toLowerCase()
+  return (data || []).find(
+    (row) => String(row.service_name || '').toLowerCase() === normalizedServiceName
+  ) || null
+}
+
+async function updateSubscriptionRow(id, row) {
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .update({
+      service_name: row.service_name,
+      amount: row.amount,
+      renewal_day: row.renewal_day,
+      renewal_month: row.renewal_month,
+      recurrence: row.recurrence,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', id)
+    .select('*')
+    .maybeSingle()
+
+  if (error) {
+    throw new ApiError(
+      502,
+      'failed to update existing subscription',
+      formatSupabaseError(error)
+    )
+  }
+
+  if (!data) {
+    throw new ApiError(404, 'subscription not found')
+  }
+
+  return data
+}
+
+async function insertOrUpdateActiveSubscription(row) {
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .insert(row)
+    .select('*')
+    .maybeSingle()
+
+  if (!error) {
+    return mapSubscriptionRow(data)
+  }
+
+  if (!isActiveDuplicateError(error)) {
+    throw new ApiError(502, 'failed to create subscription', formatSupabaseError(error))
+  }
+
+  const existing = await findActiveSubscriptionRowByService(
+    row.user_phone,
+    row.service_name
+  )
+
+  if (!existing) {
+    throw new ApiError(502, 'failed to create subscription', formatSupabaseError(error))
+  }
+
+  const updated = await updateSubscriptionRow(existing.id, row)
+  return mapSubscriptionRow(updated)
+}
+
 async function assertCompleteParsedSubscription(parsed) {
   if (parsed?.type === 'subscription' && parsed.success) {
     return parsed
@@ -195,25 +280,14 @@ async function assertCompleteParsedSubscription(parsed) {
 
 async function createSubscriptionRecord(fields) {
   const row = subscriptionToRow(fields)
-
-  const { data, error } = await supabase
-    .from('subscriptions')
-    .insert(row)
-    .select('*')
-    .maybeSingle()
-
-  if (error) {
-    throw new ApiError(502, 'failed to create subscription', formatSupabaseError(error))
-  }
-
-  return mapSubscriptionRow(data)
+  return insertOrUpdateActiveSubscription(row)
 }
 
 async function createSubscriptionFromMessage({ userPhone, message }) {
   const parsed = await parseSubscriptionMessage(message)
   await assertCompleteParsedSubscription(parsed)
 
-  const row = subscriptionToRow({
+  const subscription = await createSubscriptionRecord({
     userPhone,
     serviceName: parsed.serviceName,
     amount: parsed.amount,
@@ -222,18 +296,8 @@ async function createSubscriptionFromMessage({ userPhone, message }) {
     recurrence: parsed.recurrence
   })
 
-  const { data, error } = await supabase
-    .from('subscriptions')
-    .insert(row)
-    .select('*')
-    .maybeSingle()
-
-  if (error) {
-    throw new ApiError(502, 'failed to create subscription', formatSupabaseError(error))
-  }
-
   return {
-    subscription: mapSubscriptionRow(data),
+    subscription,
     parsed
   }
 }

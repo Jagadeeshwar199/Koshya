@@ -25,6 +25,7 @@ const cases = [
   ['stop reminding me about exercise', INTENTS.REMINDER_CANCEL],
   ['remove Netflix', INTENTS.SUBSCRIPTION_DELETE],
   ['delete Netflix subscription', INTENTS.SUBSCRIPTION_DELETE],
+  ['delete Netflix subscription reminder', INTENTS.SUBSCRIPTION_DELETE],
   ['cancel Netflix subscription', INTENTS.SUBSCRIPTION_DELETE],
   ['stop tracking Netflix', INTENTS.SUBSCRIPTION_DELETE],
   ['Show my subscriptions', INTENTS.SUBSCRIPTION_QUERY],
@@ -69,4 +70,12 @@ const update = detectIntent('Change Netflix amount to 199')
 assert.equal(update.entities.serviceName, 'Netflix')
 assert.equal(update.entities.amount, 199)
 
-console.log('Intent tests passed:', cases.length + 2)
+const relativeReminder = detectIntent('remind me to stretch in 2 minutes')
+assert.equal(relativeReminder.entities.serviceName, 'Stretch')
+assert.deepEqual(relativeReminder.entities.date, {
+  kind: 'relative_duration',
+  value: 2,
+  unit: 'minutes'
+})
+
+console.log('Intent tests passed:', cases.length + 5)

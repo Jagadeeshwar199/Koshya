@@ -14,6 +14,8 @@
     "test:reminder-confirmation": "node tests/reminder-confirmation.test.js",
     "test:reminder-query": "node tests/reminder-query.test.js",
     "test:reminder-update": "node tests/reminder-update.test.js",
+    "test:subscription-create-conflict": "node tests/subscription-create-conflict.test.js",
+    "test:subscription-update-intent": "node tests/subscription-update-intent.test.js",
     "test:day13": "node tests/day13.test.js",
     "test:webhook-auth": "node tests/webhook-auth.test.js",
     "test:reminders": "node tests/reminder.test.js",

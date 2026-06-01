@@ -1,9 +1,11 @@
 const {
   resolveSubscriptionDelete,
-  getUserSubscriptions
+  getUserSubscriptions,
+  updateSubscription
 } = require('../services/subscriptionService')
 const { sendWhatsAppMessage } = require('../services/whatsappService')
 const { setState } = require('../services/conversationStateService')
+const { matchSubscriptionsByService } = require('../utils/serviceMatcher')
 const {
   formatSubscription,
   formatSubscriptionOption
@@ -46,17 +48,90 @@ Netflix renews on 27th every month - 149`
   }
 }
 
+function buildSubscriptionUpdates(entities = {}) {
+  const updates = {}
+
+  if (entities.amount) {
+    updates.amount = entities.amount
+  }
+
+  if (entities.date?.kind === 'day') {
+    updates.renewalDay = entities.date.day
+  }
+
+  if (entities.date?.kind === 'month_day') {
+    updates.renewalDay = entities.date.day
+    updates.renewalMonth = entities.date.month
+  }
+
+  return updates
+}
+
 async function handleSubscriptionUpdateIntent(sender, intent) {
-  const reply = await sendWhatsAppMessage(
-    sender,
-    `Send the updated subscription:
+  const serviceName = intent.entities.serviceName
+  const updates = buildSubscriptionUpdates(intent.entities)
+
+  if (!serviceName || !Object.keys(updates).length) {
+    const reply = await sendWhatsAppMessage(
+      sender,
+      `Send the updated subscription:
 
 Netflix renews on 27th every month - 199`
+    )
+
+    return {
+      ok: true,
+      intent: intent.intent,
+      replySent: reply.success
+    }
+  }
+
+  const subscriptions = await getUserSubscriptions(sender)
+  const matches = matchSubscriptionsByService(subscriptions, serviceName)
+
+  if (!matches.length) {
+    const reply = await sendWhatsAppMessage(
+      sender,
+      `I couldn't find that subscription.`
+    )
+
+    return {
+      ok: true,
+      intent: intent.intent,
+      subscriptions: [],
+      replySent: reply.success
+    }
+  }
+
+  if (matches.length > 1) {
+    const options = matches
+      .map(formatSubscriptionOption)
+      .join('\n')
+    const reply = await sendWhatsAppMessage(
+      sender,
+      `Which subscription should I update?\n\n${options}\n\nReply with the full updated subscription.`
+    )
+
+    return {
+      ok: true,
+      intent: intent.intent,
+      subscriptions: matches,
+      replySent: reply.success
+    }
+  }
+
+  const subscription = await updateSubscription(matches[0].id, updates)
+  const reply = await sendWhatsAppMessage(
+    sender,
+    `✅ Updated
+
+${formatSubscription(subscription).replace(/^•\s*/, '')}`
   )
 
   return {
     ok: true,
     intent: intent.intent,
+    subscription,
     replySent: reply.success
   }
 }

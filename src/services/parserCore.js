@@ -581,6 +581,19 @@ function parseMessage(text, pending = null) {
   }
 
   if (pending) {
+    const directPattern = tryPatterns(normalized)
+
+    if (directPattern) {
+      const directResult = finalizePatternMatch(directPattern)
+
+      if (
+        directResult.type === 'subscription' ||
+        isDifferentService(pending.serviceName, directPattern.serviceName)
+      ) {
+        return directResult
+      }
+    }
+
     const fromText = extractPartial(normalized)
     const switching = isServiceSwitch(pending, fromText)
     const combined = normalizeText(

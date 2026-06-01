@@ -304,6 +304,11 @@ function resolveTriggerAt(dateEntity, now = new Date()) {
       : dateFromIstParts({ ...targetParts, day: targetParts.day + 1 })
   }
 
+  if (dateEntity.kind === 'relative_duration') {
+    const multiplier = dateEntity.unit === 'hours' ? 60 * 60 * 1000 : 60 * 1000
+    return new Date(now.getTime() + Number(dateEntity.value) * multiplier)
+  }
+
   if (dateEntity.kind === 'relative' && dateEntity.value === 'tomorrow') {
     return dateFromIstParts({ ...targetParts, day: targetParts.day + 1 })
   }
