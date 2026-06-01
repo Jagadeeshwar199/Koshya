@@ -1,9 +1,12 @@
 const INTENTS = {
   SUBSCRIPTION_CREATE: 'SUBSCRIPTION_CREATE',
   SUBSCRIPTION_UPDATE: 'SUBSCRIPTION_UPDATE',
+  SUBSCRIPTION_DELETE: 'SUBSCRIPTION_DELETE',
   SUBSCRIPTION_QUERY: 'SUBSCRIPTION_QUERY',
   REMINDER_CREATE: 'REMINDER_CREATE',
   REMINDER_UPDATE: 'REMINDER_UPDATE',
+  REMINDER_RESCHEDULE: 'REMINDER_RESCHEDULE',
+  REMINDER_CANCEL: 'REMINDER_CANCEL',
   REMINDER_QUERY: 'REMINDER_QUERY',
   HELP: 'HELP',
   UNKNOWN: 'UNKNOWN'
@@ -40,11 +43,28 @@ function isReminderQueryText(text) {
 }
 
 function isReminderUpdateText(text) {
-  return /\b(?:change|make|set|move|update)\b/.test(text) &&
+  return /\b(?:change|make|set|move|update|reschedule)\b/.test(text) &&
     (
       /\b(?:reminder|it)\b/.test(text) ||
-      /\b(?:am|pm|morning|afternoon|evening|tomorrow|today|next\s+(?:week|month|sunday|monday|tuesday|wednesday|thursday|friday|saturday))\b/.test(text)
+      /\b(?:am|pm|morning|afternoon|evening|tomorrow|today|sunday|monday|tuesday|wednesday|thursday|friday|saturday|next\s+(?:week|month|sunday|monday|tuesday|wednesday|thursday|friday|saturday))\b/.test(text)
     )
+}
+
+function isReminderCancelText(text) {
+  return (
+    /\b(?:cancel|delete|remove)\b/.test(text) &&
+      /\b(?:reminder|reminders)\b/.test(text)
+  ) ||
+    /\bstop reminding me\b/.test(text)
+}
+
+function isSubscriptionDeleteText(text) {
+  return (
+    /\b(?:delete|cancel|remove)\b/.test(text) &&
+      /\bsubscription\b/.test(text)
+  ) ||
+    /\bstop tracking\b/.test(text) ||
+    /^remove\s+[a-z0-9+.\s-]+$/.test(text)
 }
 
 function titleCase(value) {
@@ -62,6 +82,7 @@ function cleanEntity(value) {
 
   const cleaned = String(value)
     .replace(/\b(?:subscription|reminder|renewal|existing|about|for|please|my|the|a|an|to|on|tomorrow|today)\b/gi, ' ')
+    .replace(/\b(?:cancel|delete|remove|stop|tracking|reminding|change|update|edit|modify|make|set|move|reschedule|it|time)\b/gi, ' ')
     .replace(/\b(?:morning|afternoon|evening|at|next|week|month|sunday|monday|tuesday|wednesday|thursday|friday|saturday|january|february|march|april|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\b/gi, ' ')
     .replace(/\b(?:what|which|show|list|tell|me|do|i|have|renews?)\b/gi, ' ')
     .replace(/\b\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b/gi, ' ')
@@ -80,6 +101,9 @@ function extractServiceName(text) {
   const patterns = [
     /\b(?:about|for)\s+([a-z0-9+.\s-]+?)\s+(?:subscription|reminder|renewal)\b/i,
     /\b(?:change|update|edit|modify)\s+([a-z0-9+.\s-]+?)\s+(?:amount|renewal|date|subscription)\b/i,
+    /\b(?:cancel|delete|remove)\s+(?:my\s+)?([a-z0-9+.\s-]+?)\s+(?:reminder|subscription)\b/i,
+    /\bstop\s+(?:tracking|reminding me about)\s+([a-z0-9+.\s-]+)/i,
+    /^remove\s+([a-z0-9+.\s-]+)$/i,
     /\b(?:remind me(?:\s+tomorrow)?\s+(?:about|to)?|create a reminder for|set a reminder for)\s+([a-z0-9+.\s-]+)/i,
     /^([a-z0-9+.\s-]+?)\s+renews?\b/i,
     /^add\s+([a-z0-9+.\s-]+?)(?:\s+subscription)?$/i,
@@ -266,12 +290,20 @@ function detectIntent(message) {
     return buildResult(INTENTS.UNKNOWN, 0, text)
   }
 
-  if (/^(help|hi|hello|hi help|what can you do\??|commands|\?)$/i.test(text)) {
+  if (/^(help|start|hi|hello|hi help|what can you do\??|commands|\?)$/i.test(text)) {
     return buildResult(INTENTS.HELP, 0.99, text)
   }
 
+  if (isReminderCancelText(lower)) {
+    return buildResult(INTENTS.REMINDER_CANCEL, 0.94, text)
+  }
+
+  if (isSubscriptionDeleteText(lower)) {
+    return buildResult(INTENTS.SUBSCRIPTION_DELETE, 0.94, text)
+  }
+
   if (isReminderUpdateText(lower)) {
-    return buildResult(INTENTS.REMINDER_UPDATE, 0.93, text)
+    return buildResult(INTENTS.REMINDER_RESCHEDULE, 0.93, text)
   }
 
   if (/\b(?:change|update|edit|modify)\b/.test(lower)) {

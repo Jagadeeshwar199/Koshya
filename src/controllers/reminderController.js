@@ -2,6 +2,7 @@ const {
   generateReminders,
   createReminderFromIntent,
   updateLatestReminderFromIntent,
+  cancelReminderFromIntent,
   getPendingReminders,
   getUserReminders,
   markReminderSent,
@@ -9,6 +10,7 @@ const {
   resolveTriggerAt
 } = require('../services/reminderService')
 const { getUserSubscriptions } = require('../services/subscriptionService')
+const { matchSubscriptionsByService } = require('../utils/serviceMatcher')
 const { sendWhatsAppMessage } = require('../../services/whatsappService')
 
 function formatReminder(reminder) {
@@ -111,6 +113,20 @@ ${reminder.message}
 This reminder will be sent once.`
 }
 
+function formatReminderCancelConfirmation(reminder, now = new Date()) {
+  const formatted = formatReminderTime(reminder.triggerAt, now)
+
+  return `✅ Reminder cancelled
+
+${reminder.message}
+
+Previously scheduled:
+📅 ${formatted.dateLabel}
+⏰ ${formatted.timeLabel}
+
+No future reminder will be sent.`
+}
+
 function reminderMatchesDate(reminder, dateEntity, now = new Date()) {
   if (!dateEntity || !reminder.triggerAt) {
     return true
@@ -122,6 +138,10 @@ function reminderMatchesDate(reminder, dateEntity, now = new Date()) {
 
 function formatManualReminderSummary(reminder, now = new Date()) {
   return `• ${reminder.message} — ${formatReminderListTime(reminder.triggerAt, now)}`
+}
+
+function formatReminderOption(reminder, index, now = new Date()) {
+  return `${index + 1}. ${reminder.message} — ${formatReminderListTime(reminder.triggerAt, now)}`
 }
 
 function recurrenceLabel(recurrence) {
@@ -181,110 +201,6 @@ function formatSubscriptionReminderSummary(subscription, now = new Date()) {
   return `• ${subscription.serviceName} renewal — ${formatReminderListTime(reminderDate, now)}`
 }
 
-function normalizeServiceName(name) {
-  return String(name || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '')
-}
-
-function subscriptionSignature(subscription) {
-  return [
-    normalizeServiceName(subscription.serviceName),
-    subscription.amount,
-    subscription.renewalDay,
-    subscription.renewalMonth || '',
-    subscription.recurrence
-  ].join('|')
-}
-
-function levenshteinDistance(left, right) {
-  const rows = Array.from({ length: left.length + 1 }, (_, index) => [index])
-
-  for (let column = 1; column <= right.length; column++) {
-    rows[0][column] = column
-  }
-
-  for (let row = 1; row <= left.length; row++) {
-    for (let column = 1; column <= right.length; column++) {
-      const cost = left[row - 1] === right[column - 1] ? 0 : 1
-      rows[row][column] = Math.min(
-        rows[row - 1][column] + 1,
-        rows[row][column - 1] + 1,
-        rows[row - 1][column - 1] + cost
-      )
-    }
-  }
-
-  return rows[left.length][right.length]
-}
-
-function orderDuplicateMatches(matches) {
-  const groups = new Map()
-
-  for (const subscription of matches) {
-    const signature = subscriptionSignature(subscription)
-    const group = groups.get(signature) || []
-    group.push(subscription)
-    groups.set(signature, group)
-  }
-
-  return [...groups.values()]
-    .sort((left, right) => {
-      if (right.length !== left.length) {
-        return right.length - left.length
-      }
-
-      return new Date(right[0].createdAt || 0) - new Date(left[0].createdAt || 0)
-    })
-    .flat()
-}
-
-function matchSubscriptionsByService(subscriptions, requestedServiceName) {
-  if (!requestedServiceName) {
-    return subscriptions
-  }
-
-  const requested = String(requestedServiceName).trim()
-  const requestedLower = requested.toLowerCase()
-  const requestedNormalized = normalizeServiceName(requested)
-
-  const exact = subscriptions.filter(
-    (subscription) => subscription.serviceName === requested
-  )
-
-  if (exact.length) {
-    return orderDuplicateMatches(exact)
-  }
-
-  const caseInsensitiveExact = subscriptions.filter(
-    (subscription) => subscription.serviceName.toLowerCase() === requestedLower
-  )
-
-  if (caseInsensitiveExact.length) {
-    return orderDuplicateMatches(caseInsensitiveExact)
-  }
-
-  const normalizedExact = subscriptions.filter(
-    (subscription) => normalizeServiceName(subscription.serviceName) === requestedNormalized
-  )
-
-  if (normalizedExact.length) {
-    return orderDuplicateMatches(normalizedExact)
-  }
-
-  return subscriptions
-    .map((subscription) => ({
-      subscription,
-      distance: levenshteinDistance(
-        normalizeServiceName(subscription.serviceName),
-        requestedNormalized
-      )
-    }))
-    .filter(({ distance }) => distance <= Math.max(1, Math.floor(requestedNormalized.length * 0.25)))
-    .sort((left, right) => left.distance - right.distance)
-    .map(({ subscription }) => subscription)
-}
-
 async function generate(req, res, next) {
   try {
     const result = await generateReminders(req.body || {})
@@ -342,6 +258,20 @@ async function handleReminderCreateIntent(sender, text, intent) {
 }
 
 async function handleReminderUpdateIntent(sender, intent) {
+  if (!intent.entities.date) {
+    const reply = await sendWhatsAppMessage(
+      sender,
+      `What should I change it to?\n\nTry: change to 7 PM`
+    )
+
+    return {
+      ok: true,
+      intent: intent.intent,
+      reminder: null,
+      replySent: reply.success
+    }
+  }
+
   const reminder = await updateLatestReminderFromIntent({
     userPhone: sender,
     entities: intent.entities
@@ -370,6 +300,56 @@ async function handleReminderUpdateIntent(sender, intent) {
     ok: true,
     intent: intent.intent,
     reminder,
+    replySent: reply.success
+  }
+}
+
+async function handleReminderCancelIntent(sender, intent) {
+  const result = await cancelReminderFromIntent({
+    userPhone: sender,
+    entities: intent.entities
+  })
+
+  if (result.status === 'not_found') {
+    const reply = await sendWhatsAppMessage(
+      sender,
+      `I couldn't find an active reminder to cancel.`
+    )
+
+    return {
+      ok: true,
+      intent: intent.intent,
+      reminders: [],
+      replySent: reply.success
+    }
+  }
+
+  if (result.status === 'multiple') {
+    const options = result.reminders
+      .map((reminder, index) => formatReminderOption(reminder, index))
+      .join('\n')
+    const reply = await sendWhatsAppMessage(
+      sender,
+      `Which reminder should I cancel?\n\n${options}`
+    )
+
+    return {
+      ok: true,
+      intent: intent.intent,
+      reminders: result.reminders,
+      replySent: reply.success
+    }
+  }
+
+  const reply = await sendWhatsAppMessage(
+    sender,
+    formatReminderCancelConfirmation(result.reminder)
+  )
+
+  return {
+    ok: true,
+    intent: intent.intent,
+    reminder: result.reminder,
     replySent: reply.success
   }
 }
@@ -446,11 +426,13 @@ module.exports = {
   pending,
   sent,
   handleReminderCreateIntent,
+  handleReminderCancelIntent,
   handleReminderUpdateIntent,
   handleReminderQueryIntent,
   formatReminderTime,
   formatReminderConfirmation,
   formatReminderUpdateConfirmation,
+  formatReminderCancelConfirmation,
   formatReminderListTime,
   matchSubscriptionsByService
 }

@@ -2,10 +2,12 @@ const { INTENTS, detectIntent } = require('./intentService')
 const { handleSubscriptionMessage } = require('../../services/subscriptionFlowService')
 const {
   handleReminderCreateIntent,
+  handleReminderCancelIntent,
   handleReminderUpdateIntent,
   handleReminderQueryIntent
 } = require('../controllers/reminderController')
 const {
+  handleSubscriptionDeleteIntent,
   handleSubscriptionQueryIntent,
   handleSubscriptionUpdateIntent,
   handleHelpIntent,
@@ -35,6 +37,10 @@ async function routeWhatsAppMessage(sender, text) {
     return handleSubscriptionUpdateIntent(sender, intent)
   }
 
+  if (intent.intent === INTENTS.SUBSCRIPTION_DELETE) {
+    return handleSubscriptionDeleteIntent(sender, intent)
+  }
+
   if (intent.intent === INTENTS.SUBSCRIPTION_QUERY) {
     return handleSubscriptionQueryIntent(sender, intent)
   }
@@ -43,8 +49,15 @@ async function routeWhatsAppMessage(sender, text) {
     return handleReminderCreateIntent(sender, text, intent)
   }
 
-  if (intent.intent === INTENTS.REMINDER_UPDATE) {
+  if (
+    intent.intent === INTENTS.REMINDER_UPDATE ||
+    intent.intent === INTENTS.REMINDER_RESCHEDULE
+  ) {
     return handleReminderUpdateIntent(sender, intent)
+  }
+
+  if (intent.intent === INTENTS.REMINDER_CANCEL) {
+    return handleReminderCancelIntent(sender, intent)
   }
 
   if (intent.intent === INTENTS.REMINDER_QUERY) {

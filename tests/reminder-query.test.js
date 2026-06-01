@@ -5,7 +5,7 @@ process.env.SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'test-key'
 
 const {
   matchSubscriptionsByService
-} = require('../src/controllers/reminderController')
+} = require('../src/utils/serviceMatcher')
 
 const subscriptions = [
   {
