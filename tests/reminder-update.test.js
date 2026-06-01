@@ -37,6 +37,24 @@ assert.equal(
 )
 
 assert.equal(
+  updatedIso('move to tomorrow evening'),
+  '2026-06-02T12:30:00.000Z',
+  'move to tomorrow evening should move to 6 PM IST tomorrow'
+)
+
+assert.equal(
+  updatedIso('move to Monday'),
+  '2026-06-08T04:30:00.000Z',
+  'move to Monday should move to next Monday at 10 AM IST'
+)
+
+assert.equal(
+  updatedIso('move to next week'),
+  '2026-06-08T04:30:00.000Z',
+  'move to next week should move seven days ahead at 10 AM IST'
+)
+
+assert.equal(
   formatReminderUpdateConfirmation(
     {
       message: 'Exercise',
@@ -54,4 +72,4 @@ Exercise
 This reminder will be sent once.`
 )
 
-console.log('Reminder update tests passed: 4')
+console.log('Reminder update tests passed: 7')

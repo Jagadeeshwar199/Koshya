@@ -4,6 +4,8 @@ let subscriptionCalls = 0
 let reminderQueryCalls = 0
 let reminderCreateCalls = 0
 let reminderUpdateCalls = 0
+let reminderCancelCalls = 0
+let subscriptionDeleteCalls = 0
 
 require.cache[require.resolve('../services/subscriptionFlowService')] = {
   exports: {
@@ -20,6 +22,10 @@ require.cache[require.resolve('../src/controllers/reminderController')] = {
       reminderCreateCalls++
       return { ok: true, intent: 'REMINDER_CREATE' }
     },
+    handleReminderCancelIntent: async () => {
+      reminderCancelCalls++
+      return { ok: true, intent: 'REMINDER_CANCEL' }
+    },
     handleReminderUpdateIntent: async () => {
       reminderUpdateCalls++
       return { ok: true, intent: 'REMINDER_UPDATE' }
@@ -35,6 +41,10 @@ require.cache[require.resolve('../src/controllers/queryController')] = {
   exports: {
     handleSubscriptionQueryIntent: async () => ({ ok: true, intent: 'SUBSCRIPTION_QUERY' }),
     handleSubscriptionUpdateIntent: async () => ({ ok: true, intent: 'SUBSCRIPTION_UPDATE' }),
+    handleSubscriptionDeleteIntent: async () => {
+      subscriptionDeleteCalls++
+      return { ok: true, intent: 'SUBSCRIPTION_DELETE' }
+    },
     handleHelpIntent: async () => ({ ok: true, intent: 'HELP' }),
     handleUnknownIntent: async () => ({ ok: true, intent: 'UNKNOWN' })
   }
@@ -59,7 +69,13 @@ async function run() {
   await routeWhatsAppMessage('919999999999', 'change to 9 AM')
   assert.equal(reminderUpdateCalls, 1, 'reminder update should route to reminder update handler')
 
-  console.log('Intent router tests passed: 6')
+  await routeWhatsAppMessage('919999999999', 'cancel exercise reminder')
+  assert.equal(reminderCancelCalls, 1, 'reminder cancel should route to reminder cancel handler')
+
+  await routeWhatsAppMessage('919999999999', 'remove Netflix subscription')
+  assert.equal(subscriptionDeleteCalls, 1, 'subscription delete should route to subscription delete handler')
+
+  console.log('Intent router tests passed: 8')
 }
 
 run().catch((err) => {

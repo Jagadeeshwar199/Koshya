@@ -400,6 +400,12 @@ function cleanReminderSubject(message, serviceName) {
     .trim() || 'Reminder'
 }
 
+function normalizeReminderMessage(message) {
+  return String(message || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+}
+
 async function createReminderFromIntent({ userPhone, message, entities = {} }) {
   if (!userPhone) {
     throw new ApiError(400, 'userPhone is required')
@@ -463,7 +469,8 @@ async function updateLatestReminderFromIntent({ userPhone, entities = {} }) {
   const { data, error } = await supabase
     .from('reminders')
     .update({
-      trigger_at: triggerAt.toISOString()
+      trigger_at: triggerAt.toISOString(),
+      updated_at: new Date().toISOString()
     })
     .eq('id', reminder.id)
     .select('*')
@@ -474,6 +481,75 @@ async function updateLatestReminderFromIntent({ userPhone, entities = {} }) {
   }
 
   return mapReminderRow(data)
+}
+
+async function getActiveReminders(userPhone, options = {}) {
+  if (!userPhone) {
+    throw new ApiError(400, 'userPhone is required')
+  }
+
+  let query = supabase
+    .from('reminders')
+    .select('*')
+    .eq('user_phone', userPhone)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false })
+    .limit(options.limit || 20)
+
+  const { data, error } = await query
+
+  if (error) {
+    throw new ApiError(502, 'failed to fetch active reminders', formatSupabaseError(error))
+  }
+
+  return (data || []).map(mapReminderRow)
+}
+
+function matchRemindersBySubject(reminders, subject) {
+  if (!subject) {
+    return reminders
+  }
+
+  const normalizedSubject = normalizeReminderMessage(subject)
+
+  return reminders.filter((reminder) =>
+    normalizeReminderMessage(reminder.message).includes(normalizedSubject)
+  )
+}
+
+async function cancelReminder(id) {
+  const { data, error } = await supabase
+    .from('reminders')
+    .update({
+      status: 'cancelled',
+      cancelled_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', id)
+    .select('*')
+    .maybeSingle()
+
+  if (error) {
+    throw new ApiError(502, 'failed to cancel reminder', formatSupabaseError(error))
+  }
+
+  return mapReminderRow(data)
+}
+
+async function cancelReminderFromIntent({ userPhone, entities = {} }) {
+  const reminders = await getActiveReminders(userPhone)
+  const matches = matchRemindersBySubject(reminders, entities.serviceName)
+
+  if (!matches.length) {
+    return { status: 'not_found', reminders: [] }
+  }
+
+  if (matches.length > 1) {
+    return { status: 'multiple', reminders: matches }
+  }
+
+  const reminder = await cancelReminder(matches[0].id)
+  return { status: 'cancelled', reminder }
 }
 
 async function getUserReminders(userPhone, options = {}) {
@@ -640,8 +716,10 @@ module.exports = {
   generateReminders,
   createReminderFromIntent,
   updateLatestReminderFromIntent,
+  cancelReminderFromIntent,
   getPendingReminders,
   getUserReminders,
+  getActiveReminders,
   markReminderSent,
   computeNextRenewalDate,
   computeReminderRenewalDate,

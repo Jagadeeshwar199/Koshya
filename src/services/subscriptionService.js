@@ -1,5 +1,6 @@
 const supabase = require('../../config/supabase')
 const { parseSubscriptionMessage } = require('./parserService')
+const { matchSubscriptionsByService } = require('../utils/serviceMatcher')
 const { ApiError } = require('../utils/apiError')
 
 const ALLOWED_UPDATE_FIELDS = [
@@ -301,12 +302,82 @@ async function deleteSubscription(id) {
   return mapSubscriptionRow(data)
 }
 
+function countDistinctSubscriptionSignatures(subscriptions) {
+  const signatures = new Set(
+    subscriptions.map((subscription) =>
+      [
+        subscription.serviceName.toLowerCase(),
+        subscription.amount,
+        subscription.renewalDay,
+        subscription.renewalMonth || '',
+        subscription.recurrence
+      ].join('|')
+    )
+  )
+
+  return signatures.size
+}
+
+async function archiveSubscription(id) {
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .update({
+      active: false,
+      archived_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', id)
+    .select('*')
+    .maybeSingle()
+
+  if (error) {
+    throw new ApiError(502, 'failed to remove subscription', formatSupabaseError(error))
+  }
+
+  const { error: reminderError } = await supabase
+    .from('reminders')
+    .update({
+      status: 'archived',
+      archived_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    })
+    .eq('subscription_id', id)
+    .eq('status', 'pending')
+
+  if (reminderError) {
+    throw new ApiError(502, 'failed to remove subscription reminders', formatSupabaseError(reminderError))
+  }
+
+  return mapSubscriptionRow(data)
+}
+
+async function archiveSubscriptionFromIntent({ userPhone, serviceName }) {
+  if (!serviceName) {
+    return { status: 'needs_service_name', subscriptions: [] }
+  }
+
+  const subscriptions = await getUserSubscriptions(userPhone)
+  const matches = matchSubscriptionsByService(subscriptions, serviceName)
+
+  if (!matches.length) {
+    return { status: 'not_found', subscriptions: [] }
+  }
+
+  if (countDistinctSubscriptionSignatures(matches) > 1) {
+    return { status: 'multiple', subscriptions: matches }
+  }
+
+  const subscription = await archiveSubscription(matches[0].id)
+  return { status: 'removed', subscription }
+}
+
 module.exports = {
   createSubscriptionFromMessage,
   getUserSubscriptions,
   getSubscriptionById,
   updateSubscription,
   deleteSubscription,
+  archiveSubscriptionFromIntent,
   mapSubscriptionRow,
   normalizePhone,
   validateId,

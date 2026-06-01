@@ -12,6 +12,7 @@
     "test:reminder-confirmation": "node tests/reminder-confirmation.test.js",
     "test:reminder-query": "node tests/reminder-query.test.js",
     "test:reminder-update": "node tests/reminder-update.test.js",
+    "test:day13": "node tests/day13.test.js",
     "test:reminders": "node tests/reminder.test.js",
     "test:parser": "node tests/parser.test.js",
     "test:parser:sheet": "node tests/user-test-sheet.js"
