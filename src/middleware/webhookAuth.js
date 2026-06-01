@@ -30,6 +30,12 @@ function verifyWebhookSignature(req, res, next) {
   const secret = process.env.WEBHOOK_SECRET
 
   if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      logger.error('webhook.secret_not_configured')
+      return next(new ApiError(503, 'WEBHOOK_SECRET is not configured'))
+    }
+
+    logger.warn('webhook.secret_skipped_in_dev')
     return next()
   }
 
@@ -38,6 +44,7 @@ function verifyWebhookSignature(req, res, next) {
     req.get('x-gupshup-signature')
 
   if (!signature) {
+    logger.warn('webhook.missing_signature', { requestId: req.requestId })
     return next(new ApiError(401, 'Missing webhook signature'))
   }
 
@@ -58,6 +65,7 @@ function verifyWebhookSignature(req, res, next) {
     providedBuffer.length !== expectedBuffer.length ||
     !crypto.timingSafeEqual(providedBuffer, expectedBuffer)
   ) {
+    logger.warn('webhook.invalid_signature', { requestId: req.requestId })
     return next(new ApiError(401, 'Invalid webhook signature'))
   }
 

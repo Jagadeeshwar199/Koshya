@@ -11,6 +11,7 @@ const tests = [
   'test:reminder-query',
   'test:reminder-update',
   'test:day13',
+  'test:webhook-auth',
   'test:api'
 ]
 
