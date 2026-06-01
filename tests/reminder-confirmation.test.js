@@ -6,7 +6,7 @@ process.env.SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'test-key'
 const {
   formatReminderTime,
   formatReminderConfirmation
-} = require('../src/controllers/reminderController')
+} = require('../src/formatters/reminderFormatter')
 
 const now = new Date('2026-05-31T18:25:02.591Z')
 const reminder = {

@@ -193,6 +193,22 @@ async function assertCompleteParsedSubscription(parsed) {
   )
 }
 
+async function createSubscriptionRecord(fields) {
+  const row = subscriptionToRow(fields)
+
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .insert(row)
+    .select('*')
+    .maybeSingle()
+
+  if (error) {
+    throw new ApiError(502, 'failed to create subscription', formatSupabaseError(error))
+  }
+
+  return mapSubscriptionRow(data)
+}
+
 async function createSubscriptionFromMessage({ userPhone, message }) {
   const parsed = await parseSubscriptionMessage(message)
   await assertCompleteParsedSubscription(parsed)
@@ -286,20 +302,19 @@ async function deleteSubscription(id) {
 
   const { data, error } = await supabase
     .from('subscriptions')
-    .delete()
-    .eq('id', subscriptionId)
     .select('*')
+    .eq('id', subscriptionId)
     .maybeSingle()
 
   if (error) {
-    throw new ApiError(502, 'failed to delete subscription', formatSupabaseError(error))
+    throw new ApiError(502, 'failed to fetch subscription', formatSupabaseError(error))
   }
 
   if (!data) {
     throw new ApiError(404, 'subscription not found')
   }
 
-  return mapSubscriptionRow(data)
+  return archiveSubscription(subscriptionId)
 }
 
 function countDistinctSubscriptionSignatures(subscriptions) {
@@ -351,7 +366,7 @@ async function archiveSubscription(id) {
   return mapSubscriptionRow(data)
 }
 
-async function archiveSubscriptionFromIntent({ userPhone, serviceName }) {
+async function resolveSubscriptionDelete({ userPhone, serviceName }) {
   if (!serviceName) {
     return { status: 'needs_service_name', subscriptions: [] }
   }
@@ -367,17 +382,30 @@ async function archiveSubscriptionFromIntent({ userPhone, serviceName }) {
     return { status: 'multiple', subscriptions: matches }
   }
 
-  const subscription = await archiveSubscription(matches[0].id)
+  return { status: 'single', subscription: matches[0] }
+}
+
+async function archiveSubscriptionFromIntent({ userPhone, serviceName }) {
+  const resolved = await resolveSubscriptionDelete({ userPhone, serviceName })
+
+  if (resolved.status !== 'single') {
+    return resolved
+  }
+
+  const subscription = await archiveSubscription(resolved.subscription.id)
   return { status: 'removed', subscription }
 }
 
 module.exports = {
   createSubscriptionFromMessage,
+  createSubscriptionRecord,
   getUserSubscriptions,
   getSubscriptionById,
   updateSubscription,
   deleteSubscription,
+  archiveSubscription,
   archiveSubscriptionFromIntent,
+  resolveSubscriptionDelete,
   mapSubscriptionRow,
   normalizePhone,
   validateId,

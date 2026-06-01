@@ -1,11 +1,13 @@
 {
   "name": "koshya-bot",
-  "version": "1.0.0",
-  "description": "",
+  "version": "1.1.0",
+  "description": "WhatsApp subscription and reminder bot",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "lint": "eslint .",
+    "test": "node tests/run-all.js",
     "test:api": "node tests/api.test.js",
     "test:intents": "node tests/intent.test.js",
     "test:intent-router": "node tests/intent-router.test.js",
@@ -30,6 +32,7 @@
     "node-cron": "^4.2.1"
   },
   "devDependencies": {
+    "eslint": "^9.39.1",
     "nodemon": "^3.1.14"
   }
 }

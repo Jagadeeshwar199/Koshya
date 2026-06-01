@@ -4,14 +4,15 @@ const {
   finalizeDraft,
   getMissing
 } = require('./parserService')
-const { createSubscription } = require('./subscriptionService')
+const { createSubscriptionRecord } = require('./subscriptionService')
 const {
   getPending,
   setPending,
   clearPending
 } = require('./pendingSubscriptionService')
 const { sendWhatsAppMessage } = require('./whatsappService')
-const logger = require('../utils/logger')
+const { computeNextRenewalDate } = require('./reminderService')
+const logger = require('../../utils/logger')
 
 function buildQuestions(missing) {
   const lines = []
@@ -33,7 +34,11 @@ function buildQuestions(missing) {
 }
 
 function formatSaved(parsed) {
-  const renewalDate = getNextRenewalDate(parsed)
+  const renewalDate = computeNextRenewalDate({
+    renewal_day: parsed.renewalDay,
+    renewal_month: parsed.renewalMonth,
+    recurrence: parsed.recurrence
+  })
   const renewalLabel = renewalDate
     ? renewalDate.toLocaleDateString('en-IN', {
         day: 'numeric',
@@ -49,88 +54,50 @@ ${parsed.serviceName}
 Renews ${renewalLabel}`
 }
 
-function getNextRenewalDate(parsed, now = new Date()) {
-  if (!parsed.renewalDay) {
-    return null
-  }
-
-  const monthNames = [
-    'jan',
-    'feb',
-    'mar',
-    'apr',
-    'may',
-    'jun',
-    'jul',
-    'aug',
-    'sep',
-    'oct',
-    'nov',
-    'dec'
-  ]
-  const monthIndex = parsed.renewalMonth
-    ? monthNames.indexOf(String(parsed.renewalMonth).slice(0, 3).toLowerCase())
-    : now.getMonth()
-
-  if (monthIndex < 0) {
-    return null
-  }
-
-  let candidate = new Date(now.getFullYear(), monthIndex, parsed.renewalDay)
-
-  if (candidate < new Date(now.getFullYear(), now.getMonth(), now.getDate())) {
-    candidate = parsed.renewalMonth
-      ? new Date(now.getFullYear() + 1, monthIndex, parsed.renewalDay)
-      : new Date(now.getFullYear(), now.getMonth() + 1, parsed.renewalDay)
-  }
-
-  return candidate
-}
-
 async function saveAndReply(sender, parsed) {
-  const result = await createSubscription({
-    userPhone: sender,
-    serviceName: parsed.serviceName,
-    amount: parsed.amount,
-    renewalDay: parsed.renewalDay,
-    renewalMonth: parsed.renewalMonth,
-    recurrence: parsed.recurrence
-  })
+  try {
+    const subscription = await createSubscriptionRecord({
+      userPhone: sender,
+      serviceName: parsed.serviceName,
+      amount: parsed.amount,
+      renewalDay: parsed.renewalDay,
+      renewalMonth: parsed.renewalMonth,
+      recurrence: parsed.recurrence
+    })
 
-  if (!result.success) {
+    await clearPending(sender)
+    const reply = await sendWhatsAppMessage(sender, formatSaved(parsed))
+
+    if (!reply.success) {
+      logger.warn('subscription.confirmation_failed', {
+        userPhone: sender,
+        subscriptionId: subscription?.id,
+        error: reply.error
+      })
+    }
+
+    logger.info('subscription.saved', {
+      userPhone: sender,
+      subscriptionId: subscription?.id,
+      serviceName: parsed.serviceName,
+      replySent: reply.success
+    })
+
+    return {
+      ok: true,
+      subscription,
+      replySent: reply.success
+    }
+  } catch (err) {
     logger.error('subscription.save_failed', {
       userPhone: sender,
-      error: result.error
+      error: err.message || err
     })
     await sendWhatsAppMessage(
       sender,
       'I could not save that.\n\nPlease try again.'
     )
     return { ok: false }
-  }
-
-  await clearPending(sender)
-  const reply = await sendWhatsAppMessage(sender, formatSaved(parsed))
-
-  if (!reply.success) {
-    logger.warn('subscription.confirmation_failed', {
-      userPhone: sender,
-      subscriptionId: result.subscription?.id,
-      error: reply.error
-    })
-  }
-
-  logger.info('subscription.saved', {
-    userPhone: sender,
-    subscriptionId: result.subscription?.id,
-    serviceName: parsed.serviceName,
-    replySent: reply.success
-  })
-
-  return {
-    ok: true,
-    subscription: result.subscription,
-    replySent: reply.success
   }
 }
 

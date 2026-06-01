@@ -5,7 +5,7 @@ process.env.SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'test-key'
 
 const {
   formatReminderCancelConfirmation
-} = require('../src/controllers/reminderController')
+} = require('../src/formatters/reminderFormatter')
 const { detectIntent, INTENTS } = require('../src/services/intentService')
 
 assert.equal(detectIntent('cancel reminder').intent, INTENTS.REMINDER_CANCEL)

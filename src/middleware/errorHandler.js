@@ -22,6 +22,7 @@ function errorHandler(err, req, res, next) {
   }
 
   logger.error('api.unhandled_error', {
+    requestId: req.requestId,
     method: req.method,
     path: req.path,
     error: err.message,

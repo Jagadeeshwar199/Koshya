@@ -7,7 +7,7 @@ const { detectIntent } = require('../src/services/intentService')
 const { resolveTriggerAt } = require('../src/services/reminderService')
 const {
   formatReminderUpdateConfirmation
-} = require('../src/controllers/reminderController')
+} = require('../src/formatters/reminderFormatter')
 
 const originalTriggerAt = new Date('2026-06-01T04:30:00.000Z')
 

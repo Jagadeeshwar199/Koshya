@@ -1,30 +1,14 @@
 const {
-  archiveSubscriptionFromIntent,
+  resolveSubscriptionDelete,
   getUserSubscriptions
 } = require('../services/subscriptionService')
-const { sendWhatsAppMessage } = require('../../services/whatsappService')
-
-function formatSubscription(subscription) {
-  const datePart = [subscription.renewalMonth, subscription.renewalDay]
-    .filter(Boolean)
-    .join(' ')
-
-  return `• ${subscription.serviceName} — ₹${subscription.amount}/${subscription.recurrence === 'monthly' ? 'month' : subscription.recurrence}${datePart ? `, renews ${datePart}` : ''}`
-}
-
-function formatSubscriptionRemoved(subscription) {
-  return `✅ Removed
-
-${subscription.serviceName}`
-}
-
-function formatSubscriptionOption(subscription, index) {
-  const datePart = [subscription.renewalMonth, subscription.renewalDay]
-    .filter(Boolean)
-    .join(' ')
-
-  return `${index + 1}. ${subscription.serviceName} — ₹${subscription.amount}/${subscription.recurrence === 'monthly' ? 'month' : subscription.recurrence}${datePart ? `, renews ${datePart}` : ''}`
-}
+const { sendWhatsAppMessage } = require('../services/whatsappService')
+const { setState } = require('../services/conversationStateService')
+const {
+  formatSubscription,
+  formatSubscriptionOption
+} = require('../formatters/subscriptionFormatter')
+const { PAGE_SIZE } = require('./paginationController')
 
 async function handleSubscriptionQueryIntent(sender, intent) {
   const subscriptions = await getUserSubscriptions(sender)
@@ -35,13 +19,22 @@ async function handleSubscriptionQueryIntent(sender, intent) {
       )
     : subscriptions
 
-  const visible = filtered.slice(0, 5)
+  const formattedItems = filtered.map(formatSubscription)
+  const visible = formattedItems.slice(0, PAGE_SIZE)
   const body = visible.length
-    ? `${visible.map(formatSubscription).join('\n')}${filtered.length > 5 ? '\n\nReply:\nmore' : ''}`
+    ? `${visible.join('\n')}${filtered.length > PAGE_SIZE ? '\n\nReply:\nmore' : ''}`
     : `No subscriptions yet.
 
 Try:
 Netflix renews on 27th every month - 149`
+
+  if (filtered.length > PAGE_SIZE) {
+    await setState(sender, {
+      listType: 'subscriptions',
+      items: formattedItems,
+      offset: PAGE_SIZE
+    })
+  }
 
   const reply = await sendWhatsAppMessage(sender, `📺 Subscriptions\n\n${body}`)
 
@@ -69,7 +62,7 @@ Netflix renews on 27th every month - 199`
 }
 
 async function handleSubscriptionDeleteIntent(sender, intent) {
-  const result = await archiveSubscriptionFromIntent({
+  const result = await resolveSubscriptionDelete({
     userPhone: sender,
     serviceName: intent.entities.serviceName
   })
@@ -119,15 +112,26 @@ async function handleSubscriptionDeleteIntent(sender, intent) {
     }
   }
 
+  await setState(sender, {
+    action: 'confirm_delete',
+    subscriptionId: result.subscription.id,
+    serviceName: result.subscription.serviceName
+  })
+
   const reply = await sendWhatsAppMessage(
     sender,
-    formatSubscriptionRemoved(result.subscription)
+    `Remove ${result.subscription.serviceName}?
+
+Reply:
+YES to confirm
+NO to cancel`
   )
 
   return {
     ok: true,
     intent: intent.intent,
     subscription: result.subscription,
+    awaitingConfirmation: true,
     replySent: reply.success
   }
 }

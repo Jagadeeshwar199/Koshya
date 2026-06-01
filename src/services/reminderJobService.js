@@ -1,11 +1,11 @@
-const supabase = require('../config/supabase')
+const supabase = require('../../config/supabase')
 const { sendWhatsAppMessage } = require('./whatsappService')
 const {
   generateReminders,
   computeNextRenewalDate,
   computeReminderRenewalDate
-} = require('../src/services/reminderService')
-const logger = require('../utils/logger')
+} = require('./reminderService')
+const logger = require('../../utils/logger')
 
 function isSubscriptionReminderDue(sub, fromDate = new Date()) {
   return Boolean(
@@ -42,23 +42,33 @@ async function processQueuedReminders() {
 
     for (const reminder of data) {
       try {
-        logger.info('reminder.delivery_started', {
-          reminderId: reminder.id,
-          userPhone: reminder.user_phone
-        })
-
-        const { error: processingError } = await supabase
+        const { data: claimed, error: claimError } = await supabase
           .from('reminders')
           .update({ status: 'processing' })
           .eq('id', reminder.id)
+          .in('status', ['pending', 'failed'])
+          .select('*')
+          .maybeSingle()
 
-        if (processingError) {
-          throw processingError
+        if (claimError) {
+          throw claimError
         }
 
+        if (!claimed) {
+          logger.info('reminder.delivery_skipped_already_claimed', {
+            reminderId: reminder.id
+          })
+          continue
+        }
+
+        logger.info('reminder.delivery_started', {
+          reminderId: claimed.id,
+          userPhone: claimed.user_phone
+        })
+
         const sendResult = await sendWhatsAppMessage(
-          reminder.user_phone,
-          `⏰ Reminder: ${reminder.message}`
+          claimed.user_phone,
+          `⏰ Reminder: ${claimed.message}`
         )
 
         if (!sendResult.success) {
@@ -71,7 +81,8 @@ async function processQueuedReminders() {
             status: 'sent',
             sent_at: new Date().toISOString()
           })
-          .eq('id', reminder.id)
+          .eq('id', claimed.id)
+          .eq('status', 'processing')
 
         if (sentError) {
           throw sentError
@@ -79,8 +90,8 @@ async function processQueuedReminders() {
 
         sent++
         logger.info('reminder.delivery_sent', {
-          reminderId: reminder.id,
-          userPhone: reminder.user_phone
+          reminderId: claimed.id,
+          userPhone: claimed.user_phone
         })
       } catch (err) {
         logger.error('reminder.delivery_failed', {
@@ -95,6 +106,7 @@ async function processQueuedReminders() {
             retry_count: (reminder.retry_count || 0) + 1
           })
           .eq('id', reminder.id)
+          .in('status', ['pending', 'failed', 'processing'])
 
         if (failedError) {
           logger.error('reminder.failure_mark_failed', {
@@ -126,7 +138,6 @@ async function runReminderJob() {
     generated: generation.generated,
     skipped: generation.skipped,
     queued: sent,
-    subscriptions: generation.generated,
     sent
   })
 
@@ -134,7 +145,6 @@ async function runReminderJob() {
     generated: generation.generated,
     skipped: generation.skipped,
     queued: sent,
-    subscriptions: generation.generated,
     sent
   }
 }

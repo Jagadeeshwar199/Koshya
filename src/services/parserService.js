@@ -1,4 +1,9 @@
-const { parseMessage } = require('../../services/parserService')
+const {
+  parseMessage,
+  mergePendingDrafts,
+  finalizeDraft,
+  getMissing
+} = require('./parserCore')
 const { ApiError } = require('../utils/apiError')
 
 function validateMessage(message) {
@@ -16,5 +21,9 @@ async function parseSubscriptionMessage(message, pending = null) {
 
 module.exports = {
   parseSubscriptionMessage,
-  validateMessage
+  validateMessage,
+  parseMessage,
+  mergePendingDrafts,
+  finalizeDraft,
+  getMissing
 }

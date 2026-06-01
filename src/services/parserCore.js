@@ -1,7 +1,6 @@
 const MONTH_PATTERN =
   '(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)'
 
-const CURRENCY = '(?:₹|rs\\.?|inr)\\s*'
 const AMOUNT = '(?:₹|rs\\.?|inr\\s*)?(\\d+)'
 
 function normalizeText(text) {

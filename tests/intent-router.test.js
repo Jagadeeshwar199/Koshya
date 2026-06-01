@@ -7,7 +7,15 @@ let reminderUpdateCalls = 0
 let reminderCancelCalls = 0
 let subscriptionDeleteCalls = 0
 
-require.cache[require.resolve('../services/subscriptionFlowService')] = {
+require.cache[require.resolve('../src/services/conversationStateService')] = {
+  exports: {
+    getState: async () => null,
+    setState: async () => {},
+    clearState: async () => {}
+  }
+}
+
+require.cache[require.resolve('../src/services/subscriptionFlowService')] = {
   exports: {
     handleSubscriptionMessage: async () => {
       subscriptionCalls++

@@ -1,3 +1,5 @@
+const { normalizeText, normalizeForIntentMatch } = require('../utils/textUtils')
+
 const INTENTS = {
   SUBSCRIPTION_CREATE: 'SUBSCRIPTION_CREATE',
   SUBSCRIPTION_UPDATE: 'SUBSCRIPTION_UPDATE',
@@ -9,6 +11,9 @@ const INTENTS = {
   REMINDER_CANCEL: 'REMINDER_CANCEL',
   REMINDER_QUERY: 'REMINDER_QUERY',
   HELP: 'HELP',
+  LIST_MORE: 'LIST_MORE',
+  CONFIRM: 'CONFIRM',
+  CANCEL: 'CANCEL',
   UNKNOWN: 'UNKNOWN'
 }
 
@@ -16,21 +21,6 @@ const MONTH_PATTERN =
   '(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)'
 const WEEKDAY_PATTERN =
   '(sunday|monday|tuesday|wednesday|thursday|friday|saturday)'
-
-function normalizeText(text) {
-  return String(text || '')
-    .trim()
-    .replace(/\s+/g, ' ')
-}
-
-function normalizeForIntentMatch(text) {
-  return normalizeText(text)
-    .toLowerCase()
-    .replace(/['’]/g, '')
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
 
 function isReminderQueryText(text) {
   return (
@@ -292,6 +282,18 @@ function detectIntent(message) {
 
   if (/^(help|start|hi|hello|hi help|what can you do\??|commands|\?)$/i.test(text)) {
     return buildResult(INTENTS.HELP, 0.99, text)
+  }
+
+  if (/^(more|show more|next)$/i.test(text)) {
+    return buildResult(INTENTS.LIST_MORE, 0.99, text)
+  }
+
+  if (/^(yes|confirm|ok)$/i.test(text)) {
+    return buildResult(INTENTS.CONFIRM, 0.99, text)
+  }
+
+  if (/^(no|cancel|stop)$/i.test(text)) {
+    return buildResult(INTENTS.CANCEL, 0.99, text)
   }
 
   if (isReminderCancelText(lower)) {

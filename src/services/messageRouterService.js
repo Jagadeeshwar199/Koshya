@@ -1,5 +1,6 @@
 const { INTENTS, detectIntent } = require('./intentService')
-const { handleSubscriptionMessage } = require('../../services/subscriptionFlowService')
+const { handleSubscriptionMessage } = require('./subscriptionFlowService')
+const { getState } = require('./conversationStateService')
 const {
   handleReminderCreateIntent,
   handleReminderCancelIntent,
@@ -13,9 +14,28 @@ const {
   handleHelpIntent,
   handleUnknownIntent
 } = require('../controllers/queryController')
+const {
+  handleDeleteConfirm,
+  handleDeleteCancel,
+  handleListMore
+} = require('../controllers/paginationController')
 const logger = require('../../utils/logger')
 
 async function routeWhatsAppMessage(sender, text) {
+  const pendingState = await getState(sender)
+
+  if (pendingState?.action === 'confirm_delete') {
+    const intent = detectIntent(text)
+
+    if (intent.intent === INTENTS.CONFIRM) {
+      return handleDeleteConfirm(sender, pendingState)
+    }
+
+    if (intent.intent === INTENTS.CANCEL) {
+      return handleDeleteCancel(sender)
+    }
+  }
+
   const intent = detectIntent(text)
 
   logger.info('intent.detected', {
@@ -24,6 +44,10 @@ async function routeWhatsAppMessage(sender, text) {
     confidence: intent.confidence,
     entities: intent.entities
   })
+
+  if (intent.intent === INTENTS.LIST_MORE) {
+    return handleListMore(sender)
+  }
 
   if (intent.intent === INTENTS.SUBSCRIPTION_CREATE) {
     const result = await handleSubscriptionMessage(sender, text)
