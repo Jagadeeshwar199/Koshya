@@ -27,15 +27,9 @@ assert.equal(
     },
     new Date('2026-05-31T18:25:00.000Z')
   ),
-`✅ Reminder cancelled
+`✅ Cancelled
 
-Exercise
-
-Previously scheduled:
-📅 Tomorrow
-⏰ 9:00 AM IST
-
-No future reminder will be sent.`
+Exercise`
 )
 
 console.log('Day 13 tests passed: 10')

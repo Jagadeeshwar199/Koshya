@@ -62,14 +62,10 @@ assert.equal(
     },
     new Date('2026-05-31T18:25:00.000Z')
   ),
-`✅ Reminder updated
+`✅ Updated
 
 Exercise
-
-📅 Tomorrow
-⏰ 9:00 AM IST
-
-This reminder will be sent once.`
+Tomorrow, 9 AM`
 )
 
 console.log('Reminder update tests passed: 7')
