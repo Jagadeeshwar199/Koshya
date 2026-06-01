@@ -54,7 +54,7 @@ function isSubscriptionDeleteText(text) {
       /\bsubscription\b/.test(text)
   ) ||
     /\bstop tracking\b/.test(text) ||
-    /^remove\s+[a-z0-9+.\s-]+$/.test(text)
+    /^remove\s+(?!reminders?$)[a-z0-9+.\s-]+$/.test(text)
 }
 
 function titleCase(value) {
@@ -71,8 +71,9 @@ function cleanEntity(value) {
   }
 
   const cleaned = String(value)
+    .replace(/\bin\s+\d+\s+(?:minutes?|mins?|hours?|hrs?)\b/gi, ' ')
     .replace(/\b(?:subscription|reminder|renewal|existing|about|for|please|my|the|a|an|to|on|tomorrow|today)\b/gi, ' ')
-    .replace(/\b(?:cancel|delete|remove|stop|tracking|reminding|change|update|edit|modify|make|set|move|reschedule|it|time)\b/gi, ' ')
+    .replace(/\b(?:cancel|delete|remove|stop|tracking|reminding|change|update|edit|modify|make|set|move|reschedule|it|time|in|minutes?|mins?|hours?|hrs?)\b/gi, ' ')
     .replace(/\b(?:morning|afternoon|evening|at|next|week|month|sunday|monday|tuesday|wednesday|thursday|friday|saturday|january|february|march|april|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\b/gi, ' ')
     .replace(/\b(?:what|which|show|list|tell|me|do|i|have|renews?)\b/gi, ' ')
     .replace(/\b\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b/gi, ' ')
@@ -94,6 +95,8 @@ function extractServiceName(text) {
     /\b(?:cancel|delete|remove)\s+(?:my\s+)?([a-z0-9+.\s-]+?)\s+(?:reminder|subscription)\b/i,
     /\bstop\s+(?:tracking|reminding me about)\s+([a-z0-9+.\s-]+)/i,
     /^remove\s+([a-z0-9+.\s-]+)$/i,
+    /\bremind me\s+in\s+\d+\s+(?:minutes?|mins?|hours?|hrs?)\s+(?:about|to)?\s*([a-z0-9+.\s-]+)/i,
+    /\bremind me\s+(?:about|to)?\s*([a-z0-9+.\s-]+?)\s+in\s+\d+\s+(?:minutes?|mins?|hours?|hrs?)\b/i,
     /\b(?:remind me(?:\s+tomorrow)?\s+(?:about|to)?|create a reminder for|set a reminder for)\s+([a-z0-9+.\s-]+)/i,
     /^([a-z0-9+.\s-]+?)\s+renews?\b/i,
     /^add\s+([a-z0-9+.\s-]+?)(?:\s+subscription)?$/i,
@@ -169,6 +172,20 @@ function extractDate(text) {
   const lower = text.toLowerCase()
   const time = extractTime(text)
   const period = extractPeriod(text)
+  const relativeDuration = lower.match(/\bin\s+(\d+)\s+(minutes?|mins?|hours?|hrs?)\b/)
+
+  if (relativeDuration) {
+    const value = Number(relativeDuration[1])
+    const unit = relativeDuration[2].startsWith('h') ? 'hours' : 'minutes'
+
+    if (value > 0) {
+      return {
+        kind: 'relative_duration',
+        value,
+        unit
+      }
+    }
+  }
 
   if (/\btomorrow\b/.test(lower)) {
     return {
@@ -296,12 +313,12 @@ function detectIntent(message) {
     return buildResult(INTENTS.CANCEL, 0.99, text)
   }
 
-  if (isReminderCancelText(lower)) {
-    return buildResult(INTENTS.REMINDER_CANCEL, 0.94, text)
-  }
-
   if (isSubscriptionDeleteText(lower)) {
     return buildResult(INTENTS.SUBSCRIPTION_DELETE, 0.94, text)
+  }
+
+  if (isReminderCancelText(lower)) {
+    return buildResult(INTENTS.REMINDER_CANCEL, 0.94, text)
   }
 
   if (isReminderUpdateText(lower)) {
