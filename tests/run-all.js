@@ -10,6 +10,7 @@ const tests = [
   'test:reminder-confirmation',
   'test:reminder-query',
   'test:reminder-update',
+  'test:subscription-update-intent',
   'test:day13',
   'test:webhook-auth',
   'test:api'
