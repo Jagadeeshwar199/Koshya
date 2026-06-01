@@ -9,6 +9,10 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      NODE_ENV: test
+      SUPABASE_URL: http://127.0.0.1:54321
+      SUPABASE_SERVICE_ROLE_KEY: test-service-role-key
 
     steps:
       - uses: actions/checkout@v4

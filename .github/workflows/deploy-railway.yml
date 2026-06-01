@@ -8,7 +8,10 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: ${{ secrets.RAILWAY_TOKEN != '' }}
+    env:
+      NODE_ENV: test
+      SUPABASE_URL: http://127.0.0.1:54321
+      SUPABASE_SERVICE_ROLE_KEY: test-service-role-key
 
     steps:
       - uses: actions/checkout@v4
@@ -22,6 +25,12 @@ jobs:
       - run: npm test
 
       - name: Deploy to Railway
-        run: npx @railway/cli up --service "${{ secrets.RAILWAY_SERVICE_ID }}" --detach
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ] || [ -z "$RAILWAY_SERVICE_ID" ]; then
+            echo "RAILWAY_TOKEN or RAILWAY_SERVICE_ID not set — skipping deploy"
+            exit 0
+          fi
+          npx @railway/cli up --service "$RAILWAY_SERVICE_ID" --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}

@@ -16,6 +16,7 @@ const {
 } = require('./src/middleware/errorHandler')
 const { checkDatabaseHealth } = require('./src/services/healthService')
 const { stopReminderWorker } = require('./src/services/reminderWorker')
+const { validateProductionConfig } = require('./src/config/production')
 const logger = require('./utils/logger')
 
 const app = express()
@@ -74,6 +75,10 @@ app.get('/health', async (req, res) => {
   res.status(db.ok ? 200 : 503).json({
     status: db.ok ? 'ok' : 'degraded',
     service: 'koshya',
+    commit:
+      process.env.RAILWAY_GIT_COMMIT_SHA ||
+      process.env.RAILWAY_GIT_COMMIT ||
+      'local',
     time: new Date().toISOString(),
     checks: {
       database: db.ok ? 'ok' : 'error',
@@ -88,6 +93,8 @@ app.use(errorHandler)
 let serverInstance = null
 
 function start() {
+  validateProductionConfig()
+
   const { startScheduler } = require('./src/services/schedulerService')
 
   startScheduler()

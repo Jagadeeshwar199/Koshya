@@ -1,5 +1,9 @@
 const assert = require('node:assert/strict')
 
+process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://127.0.0.1:54321'
+process.env.SUPABASE_SERVICE_ROLE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY || 'test-service-role-key'
+
 let subscriptionCalls = 0
 let reminderQueryCalls = 0
 let reminderCreateCalls = 0
