@@ -81,3 +81,35 @@ npm run lint
 - Set `NODE_ENV=production` and configure all required secrets.
 - Optional: set `WEBHOOK_SECRET` for POST webhook HMAC validation.
 - Optional: set `CORS_ORIGINS` to restrict browser access.
+
+## Deploy on Railway
+
+### Option A — Railway dashboard (fastest)
+
+1. [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub** → select **Koshya** repo → branch **main**
+2. Add a **public domain** (Settings → Networking)
+3. Set environment variables (see table below)
+4. Point Gupshup webhook to `https://YOUR-DOMAIN.up.railway.app/webhook`
+
+### Option B — GitHub Actions auto-deploy
+
+1. In Railway: **Project Settings → Tokens** → create a project token
+2. Copy your **Service ID** from the service settings
+3. In GitHub repo **Settings → Secrets → Actions**, add:
+   - `RAILWAY_TOKEN` — project token from step 1
+   - `RAILWAY_SERVICE_ID` — service ID from step 2
+4. Push to `main` — CI runs tests then deploys automatically
+
+### Railway environment variables
+
+| Variable | Required |
+| --- | --- |
+| `NODE_ENV` | `production` |
+| `SUPABASE_URL` | Your Supabase project URL (Settings → API) |
+| `SUPABASE_SERVICE_ROLE_KEY` | From Supabase → Settings → API |
+| `GUPSHUP_API_KEY` | Gupshup dashboard |
+| `GUPSHUP_SOURCE_PHONE` | WhatsApp business number |
+| `WEBHOOK_VERIFY_TOKEN` | Any secret string (same in Gupshup) |
+| `API_KEY` | Any secret string for REST API auth |
+
+Railway sets `PORT` automatically. Do **not** scale to multiple instances.
