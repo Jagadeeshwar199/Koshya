@@ -20,11 +20,17 @@ if (
   )
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey, {
+const clientOptions = {
   auth: {
     persistSession: false,
     autoRefreshToken: false
   }
-})
+}
+
+if (typeof WebSocket === 'undefined') {
+  clientOptions.realtime = { transport: require('ws') }
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey, clientOptions)
 
 module.exports = supabase
