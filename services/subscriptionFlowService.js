@@ -33,15 +33,58 @@ function buildQuestions(missing) {
 }
 
 function formatSaved(parsed) {
-  const datePart = [parsed.renewalMonth, parsed.renewalDay]
-    .filter(Boolean)
-    .join(' ')
+  const renewalDate = getNextRenewalDate(parsed)
+  const renewalLabel = renewalDate
+    ? renewalDate.toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short'
+      })
+    : parsed.renewalDay
 
-  return `✅ Subscription Saved
+  return `✅ Added
 
-📦 ${parsed.serviceName}
-💰 ₹${parsed.amount}
-${datePart ? `📅 ${datePart}\n` : ''}🔁 ${parsed.recurrence}`
+${parsed.serviceName}
+₹${parsed.amount}/${parsed.recurrence === 'monthly' ? 'month' : parsed.recurrence}
+
+Renews ${renewalLabel}`
+}
+
+function getNextRenewalDate(parsed, now = new Date()) {
+  if (!parsed.renewalDay) {
+    return null
+  }
+
+  const monthNames = [
+    'jan',
+    'feb',
+    'mar',
+    'apr',
+    'may',
+    'jun',
+    'jul',
+    'aug',
+    'sep',
+    'oct',
+    'nov',
+    'dec'
+  ]
+  const monthIndex = parsed.renewalMonth
+    ? monthNames.indexOf(String(parsed.renewalMonth).slice(0, 3).toLowerCase())
+    : now.getMonth()
+
+  if (monthIndex < 0) {
+    return null
+  }
+
+  let candidate = new Date(now.getFullYear(), monthIndex, parsed.renewalDay)
+
+  if (candidate < new Date(now.getFullYear(), now.getMonth(), now.getDate())) {
+    candidate = parsed.renewalMonth
+      ? new Date(now.getFullYear() + 1, monthIndex, parsed.renewalDay)
+      : new Date(now.getFullYear(), now.getMonth() + 1, parsed.renewalDay)
+  }
+
+  return candidate
 }
 
 async function saveAndReply(sender, parsed) {
@@ -61,7 +104,7 @@ async function saveAndReply(sender, parsed) {
     })
     await sendWhatsAppMessage(
       sender,
-      '❌ Failed to save subscription. Please try again.'
+      'I could not save that.\n\nPlease try again.'
     )
     return { ok: false }
   }

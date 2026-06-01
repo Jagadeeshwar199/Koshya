@@ -9,17 +9,13 @@ function formatSubscription(subscription) {
     .filter(Boolean)
     .join(' ')
 
-  return `• ${subscription.serviceName} - Rs ${subscription.amount}, ${subscription.recurrence}${datePart ? `, renews ${datePart}` : ''}`
+  return `• ${subscription.serviceName} — ₹${subscription.amount}/${subscription.recurrence === 'monthly' ? 'month' : subscription.recurrence}${datePart ? `, renews ${datePart}` : ''}`
 }
 
 function formatSubscriptionRemoved(subscription) {
-  return `✅ Subscription removed
+  return `✅ Removed
 
-${subscription.serviceName}
-
-₹${subscription.amount}/${subscription.recurrence === 'monthly' ? 'month' : subscription.recurrence}
-
-Future renewal reminders will no longer be sent.`
+${subscription.serviceName}`
 }
 
 function formatSubscriptionOption(subscription, index) {
@@ -27,7 +23,7 @@ function formatSubscriptionOption(subscription, index) {
     .filter(Boolean)
     .join(' ')
 
-  return `${index + 1}. ${subscription.serviceName} — ₹${subscription.amount}, ${subscription.recurrence}${datePart ? `, renews ${datePart}` : ''}`
+  return `${index + 1}. ${subscription.serviceName} — ₹${subscription.amount}/${subscription.recurrence === 'monthly' ? 'month' : subscription.recurrence}${datePart ? `, renews ${datePart}` : ''}`
 }
 
 async function handleSubscriptionQueryIntent(sender, intent) {
@@ -39,11 +35,15 @@ async function handleSubscriptionQueryIntent(sender, intent) {
       )
     : subscriptions
 
-  const body = filtered.length
-    ? filtered.map(formatSubscription).join('\n')
-    : 'No subscriptions found.'
+  const visible = filtered.slice(0, 5)
+  const body = visible.length
+    ? `${visible.map(formatSubscription).join('\n')}${filtered.length > 5 ? '\n\nReply:\nmore' : ''}`
+    : `No subscriptions yet.
 
-  const reply = await sendWhatsAppMessage(sender, `📦 Subscriptions\n\n${body}`)
+Try:
+Netflix renews on 27th every month - 149`
+
+  const reply = await sendWhatsAppMessage(sender, `📺 Subscriptions\n\n${body}`)
 
   return {
     ok: true,
@@ -56,7 +56,9 @@ async function handleSubscriptionQueryIntent(sender, intent) {
 async function handleSubscriptionUpdateIntent(sender, intent) {
   const reply = await sendWhatsAppMessage(
     sender,
-    `I can update subscriptions soon. For now, send the full updated subscription like:\n\nNetflix renews on 27th every month - 199`
+    `Send the updated subscription:
+
+Netflix renews on 27th every month - 199`
   )
 
   return {
@@ -75,7 +77,7 @@ async function handleSubscriptionDeleteIntent(sender, intent) {
   if (result.status === 'needs_service_name') {
     const reply = await sendWhatsAppMessage(
       sender,
-      `Which subscription should I remove?\n\nTry: remove Netflix subscription`
+      `Which subscription should I remove?\n\nTry:\nremove Netflix subscription`
     )
 
     return {
@@ -106,7 +108,7 @@ async function handleSubscriptionDeleteIntent(sender, intent) {
       .join('\n')
     const reply = await sendWhatsAppMessage(
       sender,
-      `Which subscription should I remove?\n\n${options}`
+      `Which subscription should I remove?\n\n${options}\n\nReply with the subscription name.`
     )
 
     return {
@@ -135,37 +137,21 @@ async function handleHelpIntent(sender, intent) {
     sender,
 `👋 I'm Koshya
 
-I help you track subscriptions and personal reminders through WhatsApp.
+I help you track subscriptions and reminders.
 
-Examples:
-
-📺 Subscriptions
+Subscriptions
 
 Netflix renews on 27th every month - 149
 
-Spotify monthly 119 on 15th
-
-🔔 Reminders
+Reminders
 
 Remind me to exercise tomorrow
 
-Remind me to pay rent on June 5
+Queries
 
-📋 Queries
+Show reminders
 
-What reminders do I have tomorrow?
-
-Show Netflix reminder
-
-List subscriptions
-
-⚙️ Updates
-
-change to 7 PM
-
-cancel exercise reminder
-
-remove Netflix subscription`
+Show Netflix reminder`
   )
 
   return {
@@ -178,7 +164,12 @@ remove Netflix subscription`
 async function handleUnknownIntent(sender, intent) {
   const reply = await sendWhatsAppMessage(
     sender,
-    `I could not understand that yet. Reply "help" to see what I can do.`
+    `I didn't get that.
+
+Try:
+• remind me tomorrow
+• show reminders
+• help`
   )
 
   return {

@@ -16,25 +16,18 @@ const reminder = {
 
 assert.deepEqual(formatReminderTime(reminder.triggerAt, now), {
   dateLabel: 'Tomorrow',
-  timeLabel: '10:00 AM IST'
+  timeLabel: '10 AM'
 })
 
 assert.equal(
   formatReminderConfirmation(reminder, now),
-`✅ Reminder created
+`✅ Reminder set
 
 Exercise
-📅 Tomorrow
-⏰ 10:00 AM IST
-
-This reminder will be sent once.
+Tomorrow, 10 AM
 
 Reply:
-"change to 7 AM"
-or
-"change to 6 PM"
-
-to update the reminder.`
+change to 7 PM`
 )
 
 console.log('Reminder confirmation tests passed: 2')

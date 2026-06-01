@@ -57,7 +57,9 @@ function formatReminderTime(triggerAt, now = new Date()) {
 
   const triggerDate = new Date(triggerAt)
   const parts = getIstParts(triggerDate)
-  const time = `${parts.hour}:${parts.minute} ${parts.dayPeriod.toUpperCase()} IST`
+  const time = parts.minute === '00'
+    ? `${parts.hour} ${parts.dayPeriod.toUpperCase()}`
+    : `${parts.hour}:${parts.minute} ${parts.dayPeriod.toUpperCase()}`
   const triggerKey = getIstDateKey(triggerDate)
   const todayKey = getIstDateKey(now)
   const tomorrowKey = getIstDateKey(addDays(now, 1))
@@ -71,60 +73,41 @@ function formatReminderTime(triggerAt, now = new Date()) {
   }
 
   return {
-    dateLabel: `${parts.day} ${parts.month} ${parts.year}`,
+    dateLabel: `${parts.day} ${parts.month}`,
     timeLabel: time
   }
 }
 
 function formatReminderListTime(triggerAt, now = new Date()) {
   const formatted = formatReminderTime(triggerAt, now)
-  return `${formatted.dateLabel} ${formatted.timeLabel.replace(' IST', '')}`
+  return `${formatted.dateLabel}, ${formatted.timeLabel}`
 }
 
 function formatReminderConfirmation(reminder, now = new Date()) {
   const formatted = formatReminderTime(reminder.triggerAt, now)
 
-  return `✅ Reminder created
+  return `✅ Reminder set
 
 ${reminder.message}
-📅 ${formatted.dateLabel}
-⏰ ${formatted.timeLabel}
-
-This reminder will be sent once.
+${formatted.dateLabel}, ${formatted.timeLabel}
 
 Reply:
-"change to 7 AM"
-or
-"change to 6 PM"
-
-to update the reminder.`
+change to 7 PM`
 }
 
 function formatReminderUpdateConfirmation(reminder, now = new Date()) {
   const formatted = formatReminderTime(reminder.triggerAt, now)
 
-  return `✅ Reminder updated
+  return `✅ Updated
 
 ${reminder.message}
-
-📅 ${formatted.dateLabel}
-⏰ ${formatted.timeLabel}
-
-This reminder will be sent once.`
+${formatted.dateLabel}, ${formatted.timeLabel}`
 }
 
 function formatReminderCancelConfirmation(reminder, now = new Date()) {
-  const formatted = formatReminderTime(reminder.triggerAt, now)
+  return `✅ Cancelled
 
-  return `✅ Reminder cancelled
-
-${reminder.message}
-
-Previously scheduled:
-📅 ${formatted.dateLabel}
-⏰ ${formatted.timeLabel}
-
-No future reminder will be sent.`
+${reminder.message}`
 }
 
 function reminderMatchesDate(reminder, dateEntity, now = new Date()) {
@@ -184,11 +167,8 @@ function formatSubscriptionReminderDetail(subscription, now = new Date()) {
 
   return `📺 ${subscription.serviceName}
 
-💰 ₹${subscription.amount}/${recurrenceLabel(subscription.recurrence)}
-📅 Renewal day: ${subscription.renewalDay}
-🔔 Reminder: ${subscription.reminderDaysBefore || 1} day before renewal
-⏰ Next reminder: ${reminderTime} IST
-✅ Status: ${subscription.active ? 'Active' : 'Inactive'}`
+₹${subscription.amount}/${recurrenceLabel(subscription.recurrence)}
+Renews ${subscription.renewalDay}${subscription.renewalMonth ? ` ${subscription.renewalMonth}` : ''}`
 }
 
 function formatSubscriptionReminderSummary(subscription, now = new Date()) {
@@ -198,7 +178,7 @@ function formatSubscriptionReminderSummary(subscription, now = new Date()) {
     return null
   }
 
-  return `• ${subscription.serviceName} renewal — ${formatReminderListTime(reminderDate, now)}`
+  return `• ${subscription.serviceName} — ${formatReminderListTime(reminderDate, now)}`
 }
 
 async function generate(req, res, next) {
@@ -261,7 +241,7 @@ async function handleReminderUpdateIntent(sender, intent) {
   if (!intent.entities.date) {
     const reply = await sendWhatsAppMessage(
       sender,
-      `What should I change it to?\n\nTry: change to 7 PM`
+      `What time should I use?\n\nTry:\nchange to 7 PM`
     )
 
     return {
@@ -330,7 +310,7 @@ async function handleReminderCancelIntent(sender, intent) {
       .join('\n')
     const reply = await sendWhatsAppMessage(
       sender,
-      `Which reminder should I cancel?\n\n${options}`
+      `Which reminder should I cancel?\n\n${options}\n\nReply with the reminder name.`
     )
 
     return {
@@ -406,9 +386,12 @@ async function handleReminderQueryIntent(sender, intent) {
     ? `🔎 Tomorrow's reminders`
     : '🔎 Active reminders'
 
-  const body = summaries.length
-    ? summaries.join('\n')
-    : 'No reminders found.'
+  const visibleSummaries = summaries.slice(0, 5)
+  const body = visibleSummaries.length
+    ? `${visibleSummaries.join('\n')}${summaries.length > 5 ? '\n\nReply:\nmore' : ''}`
+    : intent.entities.date?.value === 'tomorrow'
+      ? 'No reminders tomorrow 🎉'
+      : 'No reminders.'
 
   const reply = await sendWhatsAppMessage(sender, `${title}\n\n${body}`)
 
