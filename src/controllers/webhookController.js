@@ -1,89 +1,73 @@
 const supabase = require('../../config/supabase')
-const {
-  routeWhatsAppMessage
-} = require('../services/messageRouterService')
+const { routeWhatsAppMessage } = require('../services/messageRouterService')
 const {
   isMessageProcessed,
   markMessageProcessed
 } = require('../services/webhookIdempotencyService')
+const { sendWhatsAppMessage } = require('../services/whatsappService')
+const { parseWebhookMessage } = require('../utils/webhookMessage')
 const logger = require('../../utils/logger')
 
 async function handleWebhook(req, res) {
   try {
-    logger.info('webhook.received', {
-      requestId: req.requestId,
-      hasEntry: Boolean(req.body?.entry?.length)
-    })
-
-    const value =
-      req.body.entry?.[0]
-        ?.changes?.[0]
-        ?.value
-
+    const value = req.body?.entry?.[0]?.changes?.[0]?.value
     const statusUpdate = value?.statuses?.[0]
 
     if (statusUpdate) {
-      logger.info('webhook.status_event', {
+      return res.sendStatus(200)
+    }
+
+    const incoming = parseWebhookMessage(req.body)
+    if (!incoming?.sender || !incoming.text) {
+      logger.warn('webhook.no_text_message', {
         requestId: req.requestId,
-        status: statusUpdate.status
-      })
-
-      return res.sendStatus(200)
-    }
-
-    const incomingMessage = value?.messages?.[0]
-
-    if (!incomingMessage) {
-      return res.sendStatus(200)
-    }
-
-    if (incomingMessage.type !== 'text') {
-      return res.sendStatus(200)
-    }
-
-    const sender = incomingMessage.from
-    const text = (incomingMessage.text?.body || '').trim()
-    const messageId = incomingMessage.id
-
-    if (!sender || !text) {
-      logger.warn('webhook.invalid_text_message', {
-        requestId: req.requestId,
-        hasSender: Boolean(sender),
-        hasText: Boolean(text)
+        bodyType: req.body?.type
       })
       return res.sendStatus(200)
     }
 
-    if (await isMessageProcessed(messageId)) {
-      logger.info('webhook.duplicate_skipped', {
-        requestId: req.requestId,
-        messageId,
-        userPhone: sender
-      })
+    const sender = incoming.sender
+    const text = incoming.text.replace(/\\+$/, '').trim()
+    const messageId = incoming.messageId
+
+    if (!text) {
       return res.sendStatus(200)
     }
 
-    const { error: messageError } = await supabase
-      .from('messages')
-      .insert([
-        {
-          user_phone: sender,
-          message: text
-        }
-      ])
+    if (messageId && (await isMessageProcessed(messageId))) {
+      return res.sendStatus(200)
+    }
+
+    const { error: messageError } = await supabase.from('messages').insert({
+      user_phone: sender,
+      message: text
+    })
 
     if (messageError) {
-      logger.error('webhook.raw_message_save_failed', {
-        requestId: req.requestId,
-        userPhone: sender,
-        error: messageError
-      })
+      logger.error('webhook.raw_message_save_failed', { userPhone: sender, error: messageError })
       return res.sendStatus(500)
     }
 
-    await markMessageProcessed(messageId, sender)
+    let result
+    try {
+      result = await routeWhatsAppMessage(sender, text)
+    } catch (routeErr) {
+      logger.error('webhook.route_failed', {
+        userPhone: sender,
+        error: routeErr.message,
+        stack: routeErr.stack
+      })
+      await sendWhatsAppMessage(
+        sender,
+        'Something went wrong.\n\nPlease try again in a moment.'
+      )
+      return res.sendStatus(200)
+    }
 
-    const result = await routeWhatsAppMessage(sender, text)
+    if (messageId) {
+      await markMessageProcessed(messageId, sender)
+    }
+
     logger.info('webhook.intent_flow_done', {
       requestId: req.requestId,
       userPhone: sender,
@@ -91,6 +75,7 @@ async function handleWebhook(req, res) {
       ok: result?.ok,
       replySent: result?.replySent
     })
+
     return res.sendStatus(200)
   } catch (err) {
     logger.error('webhook.error', {
@@ -98,11 +83,8 @@ async function handleWebhook(req, res) {
       error: err.message,
       stack: err.stack
     })
-
     return res.sendStatus(500)
   }
 }
 
-module.exports = {
-  handleWebhook
-}
+module.exports = { handleWebhook }

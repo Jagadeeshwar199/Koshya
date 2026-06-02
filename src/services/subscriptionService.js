@@ -233,21 +233,6 @@ async function createSubscriptionRecord(fields) {
     .select('*')
     .maybeSingle()
 
-  if (error?.code === '23505' && existing?.id) {
-    const { data, error: updateError } = await supabase
-      .from('subscriptions')
-      .update({ ...row, active: true, archived_at: null, updated_at: now })
-      .eq('id', existing.id)
-      .select('*')
-      .maybeSingle()
-
-    if (updateError) {
-      throw new ApiError(502, 'failed to update subscription', formatSupabaseError(updateError))
-    }
-
-    return mapSubscriptionRow(data)
-  }
-
   if (error?.code === '23505') {
     const { data: conflictRows } = await supabase
       .from('subscriptions')

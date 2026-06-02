@@ -10,7 +10,7 @@ async function getState(userPhone) {
 
   if (error) {
     logger.error('conversation_state.get_failed', { userPhone, error })
-    throw error
+    return null
   }
 
   return data?.state || null
