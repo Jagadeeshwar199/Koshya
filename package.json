@@ -16,6 +16,7 @@
     "test:reminder-update": "node tests/reminder-update.test.js",
     "test:day13": "node tests/day13.test.js",
     "test:webhook-auth": "node tests/webhook-auth.test.js",
+    "test:ux": "node tests/ux.test.js",
     "test:reminders": "node tests/reminder.test.js",
     "test:reminder-title": "node tests/reminder-title.test.js",
     "test:parser": "node tests/parser.test.js",

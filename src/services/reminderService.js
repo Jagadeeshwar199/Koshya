@@ -606,6 +606,10 @@ async function getUserReminders(userPhone, options = {}) {
     query = query.eq('status', options.status)
   }
 
+  if (options.manualOnly) {
+    query = query.is('subscription_id', null)
+  }
+
   if (options.serviceName) {
     query = query.ilike('message', `%${options.serviceName}%`)
   }
@@ -616,7 +620,9 @@ async function getUserReminders(userPhone, options = {}) {
     throw new ApiError(502, 'failed to fetch reminders', formatSupabaseError(error))
   }
 
-  return (data || []).map(mapReminderRow)
+  return (data || [])
+    .filter((row) => !/test koshya|demo reminder/i.test(row.message || ''))
+    .map(mapReminderRow)
 }
 
 async function reminderAlreadyQueued(reminder, dayStart, dayEnd) {

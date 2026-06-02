@@ -6,7 +6,21 @@ const {
 } = require('../services/webhookIdempotencyService')
 const { sendWhatsAppMessage } = require('../services/whatsappService')
 const { parseWebhookMessage } = require('../utils/webhookMessage')
+const { WELCOME_TEXT } = require('../controllers/queryController')
 const logger = require('../../utils/logger')
+
+async function isFirstMessage(userPhone) {
+  const { count, error } = await supabase
+    .from('messages')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_phone', userPhone)
+
+  if (error) {
+    return false
+  }
+
+  return count === 1
+}
 
 async function handleWebhook(req, res) {
   try {
@@ -48,6 +62,10 @@ async function handleWebhook(req, res) {
       return res.sendStatus(500)
     }
 
+    if (await isFirstMessage(sender)) {
+      await sendWhatsAppMessage(sender, WELCOME_TEXT)
+    }
+
     let result
     try {
       result = await routeWhatsAppMessage(sender, text)
@@ -59,7 +77,7 @@ async function handleWebhook(req, res) {
       })
       await sendWhatsAppMessage(
         sender,
-        'Something went wrong.\n\nPlease try again in a moment.'
+        'Something went wrong.\n\nTry again or reply help.'
       )
       return res.sendStatus(200)
     }

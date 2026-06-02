@@ -14,22 +14,17 @@ const {
   resolveTriggerAt,
   dedupeReminders
 } = require('../services/reminderService')
-const { getUserSubscriptions } = require('../services/subscriptionService')
-const { matchSubscriptionsByService } = require('../utils/serviceMatcher')
 const { sendWhatsAppMessage } = require('../services/whatsappService')
 const { setState, clearState } = require('../services/conversationStateService')
 const { PAGE_SIZE } = require('./paginationController')
+const { REM_SAVED_NEXT } = require('../utils/uxMessages')
 const {
   formatReminderConfirmation,
   formatReminderUpdateConfirmation,
   formatReminderCancelConfirmation,
   formatManualReminderSummary,
   formatReminderOption,
-  formatSubscriptionReminderDetail,
-  formatSubscriptionReminderSummary,
-  reminderMatchesDate,
-  getIstDateKey,
-  subscriptionToReminderDate
+  reminderMatchesDate
 } = require('../formatters/reminderFormatter')
 
 async function generate(req, res, next) {
@@ -72,11 +67,12 @@ async function handleReminderCreateIntent(sender, text, intent) {
   if (needsExplicitTimePrompt(intent.entities)) {
     await setState(sender, {
       action: 'awaiting_reminder_create_time',
-      draftMessage: text
+      draftMessage: text,
+      draftEntities: intent.entities
     })
     const reply = await sendWhatsAppMessage(
       sender,
-      `What time should I remind you?\n\nTry:\n7 PM`
+      `When should I remind you?\n\nTry:\ntomorrow at 8 PM`
     )
     return {
       ok: true,
@@ -94,7 +90,7 @@ async function handleReminderCreateIntent(sender, text, intent) {
 
   const reply = await sendWhatsAppMessage(
     sender,
-    formatReminderConfirmation(reminder)
+    `${formatReminderConfirmation(reminder)}${REM_SAVED_NEXT}`
   )
 
   return {
@@ -110,7 +106,7 @@ async function handleReminderUpdateIntent(sender, intent) {
     await setState(sender, { action: 'awaiting_reminder_time' })
     const reply = await sendWhatsAppMessage(
       sender,
-      `What time should I use?\n\nTry:\nchange to 7 PM`
+      `What time should I use?\n\nTry:\nChange reminder to 7 PM`
     )
 
     return {
@@ -177,12 +173,29 @@ async function handleReminderTimeFollowUp(sender, dateEntity) {
   return { ok: true, intent: 'REMINDER_RESCHEDULE', reminder, replySent: reply.success }
 }
 
-async function handleReminderCreateTimeFollowUp(sender, draftMessage, timeText) {
+async function handleReminderCreateTimeFollowUp(sender, draftMessage, timeText, priorEntities = null) {
   const draftIntent = detectIntent(draftMessage)
   const timeIntent = detectIntent(timeText)
   const entities = {
     ...draftIntent.entities,
-    date: mergeDateEntities(draftIntent.entities.date, timeIntent.entities.date)
+    ...(priorEntities || {}),
+    date: mergeDateEntities(
+      mergeDateEntities(draftIntent.entities.date, priorEntities?.date),
+      timeIntent.entities.date
+    )
+  }
+
+  if (needsExplicitTimePrompt({ date: entities.date })) {
+    await setState(sender, {
+      action: 'awaiting_reminder_create_time',
+      draftMessage,
+      draftEntities: { date: entities.date }
+    })
+    const reply = await sendWhatsAppMessage(
+      sender,
+      `When should I remind you?\n\nTry:\ntomorrow at 8 PM`
+    )
+    return { ok: true, intent: 'REMINDER_CREATE', reminder: null, replySent: reply.success }
   }
 
   await clearState(sender)
@@ -244,69 +257,40 @@ async function handleReminderCancelIntent(sender, intent) {
 
 async function handleReminderQueryIntent(sender, intent) {
   const now = new Date()
-  const serviceName = intent.entities.serviceName
   const manualReminders = await getUserReminders(sender, {
-    serviceName: intent.entities.serviceName,
     status: 'pending',
-    limit: 50
+    limit: 50,
+    manualOnly: true
   })
   const filteredManualReminders = dedupeReminders(
     manualReminders.filter((reminder) =>
       reminderMatchesDate(reminder, intent.entities.date, now)
     )
   )
-  const subscriptions = await getUserSubscriptions(sender)
-  const filteredSubscriptions = matchSubscriptionsByService(subscriptions, serviceName)
 
-  if (serviceName && filteredSubscriptions.length) {
-    const reply = await sendWhatsAppMessage(
-      sender,
-      formatSubscriptionReminderDetail(filteredSubscriptions[0])
-    )
-
-    return {
-      ok: true,
-      intent: intent.intent,
-      reminders: filteredManualReminders,
-      subscriptions: filteredSubscriptions,
-      replySent: reply.success
-    }
-  }
-
-  const subscriptionSummaries = filteredSubscriptions
-    .map((subscription) => formatSubscriptionReminderSummary(subscription, now))
-    .filter(Boolean)
-    .filter((line) => {
-      if (!intent.entities.date) {
-        return true
-      }
-
-      const reminderDate = subscriptionToReminderDate(
-        filteredSubscriptions.find((subscription) =>
-          line.includes(subscription.serviceName)
-        )
-      )
-      return getIstDateKey(reminderDate) === getIstDateKey(resolveTriggerAt(intent.entities.date, now))
-    })
-  const manualSummaries = filteredManualReminders.map((reminder) =>
-    formatManualReminderSummary(reminder, now)
-  )
-  const summaries = [...manualSummaries, ...subscriptionSummaries]
   const title = intent.entities.date?.value === 'tomorrow'
     ? `🔎 Tomorrow's reminders`
-    : '🔎 Active reminders'
+    : intent.entities.date?.value === 'today'
+      ? `🔎 Today's reminders`
+      : '🔎 Reminders'
 
-  const visibleSummaries = summaries.slice(0, PAGE_SIZE)
+  const visibleSummaries = filteredManualReminders
+    .slice(0, PAGE_SIZE)
+    .map((reminder) => formatManualReminderSummary(reminder, now))
   const body = visibleSummaries.length
-    ? `${visibleSummaries.join('\n')}${summaries.length > PAGE_SIZE ? '\n\nReply:\nmore' : ''}`
+    ? `${visibleSummaries.join('\n')}${filteredManualReminders.length > PAGE_SIZE ? '\n\nReply:\nmore' : ''}`
     : intent.entities.date?.value === 'tomorrow'
       ? 'No reminders tomorrow 🎉'
-      : 'No reminders.'
+      : intent.entities.date?.value === 'today'
+        ? 'No reminders today 🎉'
+        : 'No reminders.'
 
-  if (summaries.length > PAGE_SIZE) {
+  if (filteredManualReminders.length > PAGE_SIZE) {
     await setState(sender, {
       listType: 'reminders',
-      items: summaries,
+      items: filteredManualReminders.map((reminder) =>
+        formatManualReminderSummary(reminder, now)
+      ),
       offset: PAGE_SIZE
     })
   }
@@ -317,7 +301,6 @@ async function handleReminderQueryIntent(sender, intent) {
     ok: true,
     intent: intent.intent,
     reminders: filteredManualReminders,
-    subscriptions: filteredSubscriptions,
     replySent: reply.success
   }
 }
@@ -334,6 +317,5 @@ module.exports = {
   handleReminderQueryIntent,
   formatReminderConfirmation,
   formatReminderUpdateConfirmation,
-  formatReminderCancelConfirmation,
-  matchSubscriptionsByService
+  formatReminderCancelConfirmation
 }

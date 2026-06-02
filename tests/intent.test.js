@@ -50,7 +50,11 @@ const cases = [
   ['Upcoming reminders', INTENTS.REMINDER_QUERY],
   ['Upcoming reminders tomorrow', INTENTS.REMINDER_QUERY],
   ['Tomorrow renewal reminders', INTENTS.REMINDER_QUERY],
-  ['Tomorrow subscriptions', INTENTS.REMINDER_QUERY],
+  ['Tomorrow subscriptions', INTENTS.SUBSCRIPTION_QUERY],
+  ['How many subscriptions do I have?', INTENTS.SUBSCRIPTION_QUERY],
+  ['What renews next?', INTENTS.SUBSCRIPTION_QUERY],
+  ['What renews this month?', INTENTS.SUBSCRIPTION_QUERY],
+  ['Update Netflix to 199', INTENTS.SUBSCRIPTION_UPDATE],
   ['Show Netflix reminder', INTENTS.REMINDER_QUERY],
   ['Tell me about an existing Netflix reminder', INTENTS.REMINDER_QUERY],
   ['What renews tomorrow?', INTENTS.REMINDER_QUERY],
@@ -79,4 +83,6 @@ assert.equal(update.entities.amount, 199)
 assert.equal(detectIntent('7 pm').intent, INTENTS.UNKNOWN)
 assert.equal(detectIntent('Okay').intent, INTENTS.CONFIRM)
 
-console.log('Intent tests passed:', cases.length + 4)
+assert.equal(detectIntent('Delete everything').intent, INTENTS.UNKNOWN)
+
+console.log('Intent tests passed:', cases.length + 5)

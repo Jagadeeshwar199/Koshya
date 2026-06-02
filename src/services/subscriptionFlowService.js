@@ -12,6 +12,7 @@ const {
 } = require('./pendingSubscriptionService')
 const { sendWhatsAppMessage } = require('./whatsappService')
 const { computeNextRenewalDate } = require('./reminderService')
+const { SUB_SAVED_NEXT } = require('../utils/uxMessages')
 const logger = require('../../utils/logger')
 
 function buildQuestions(missing) {
@@ -51,7 +52,7 @@ function formatSaved(parsed) {
 ${parsed.serviceName}
 ₹${parsed.amount}/${parsed.recurrence === 'monthly' ? 'month' : parsed.recurrence}
 
-Renews ${renewalLabel}`
+Renews ${renewalLabel}${SUB_SAVED_NEXT}`
 }
 
 async function saveAndReply(sender, parsed) {
@@ -95,7 +96,7 @@ async function saveAndReply(sender, parsed) {
     })
     await sendWhatsAppMessage(
       sender,
-      'I could not save that.\n\nPlease try again.'
+      `Couldn't save that. Try again:\nNetflix renews on 27th every month - 149`
     )
     return { ok: false }
   }
@@ -112,7 +113,7 @@ async function askForMissing(sender, draft) {
 
   await sendWhatsAppMessage(
     sender,
-    `${intro}\n\n${buildQuestions(missing)}\n\nReply in one message, e.g. "149 monthly on 27th"`
+    `${intro}\n\n${buildQuestions(missing)}\n\nExample: 149 monthly on 27th`
   )
 
   return { ok: true, asked: true }

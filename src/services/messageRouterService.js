@@ -15,7 +15,9 @@ const {
   handleSubscriptionQueryIntent,
   handleSubscriptionUpdateIntent,
   handleHelpIntent,
-  handleUnknownIntent
+  handleUnknownIntent,
+  handleClarifyIntent,
+  WELCOME_TEXT
 } = require('../controllers/queryController')
 const {
   handleDeleteConfirm,
@@ -24,7 +26,7 @@ const {
 } = require('../controllers/paginationController')
 const logger = require('../../utils/logger')
 
-async function routeWhatsAppMessage(sender, text) {
+async function routeWhatsAppMessage(sender, text, options = {}) {
   const pendingState = await getState(sender)
 
   if (pendingState?.action === 'confirm_delete') {
@@ -49,11 +51,12 @@ async function routeWhatsAppMessage(sender, text) {
 
   if (pendingState?.action === 'awaiting_reminder_create_time' && pendingState.draftMessage) {
     const intent = detectIntent(text)
-    if (intent.entities.date) {
+    if (intent.entities.date || pendingState.draftEntities) {
       return handleReminderCreateTimeFollowUp(
         sender,
         pendingState.draftMessage,
-        text
+        text,
+        pendingState.draftEntities
       )
     }
     await clearState(sender)
@@ -61,7 +64,19 @@ async function routeWhatsAppMessage(sender, text) {
 
   const intent = detectIntent(text)
 
-  if (intent.intent === INTENTS.CONFIRM) {
+  if (
+    intent.confidence < 0.65 &&
+    intent.intent !== INTENTS.UNKNOWN &&
+    intent.intent !== INTENTS.SUBSCRIPTION_CREATE &&
+    intent.intent !== INTENTS.REMINDER_CREATE &&
+    intent.intent !== INTENTS.SUBSCRIPTION_DELETE &&
+    intent.intent !== INTENTS.REMINDER_RESCHEDULE &&
+    intent.intent !== INTENTS.REMINDER_CANCEL
+  ) {
+    return handleClarifyIntent(sender, intent)
+  }
+
+  if (intent.intent === INTENTS.CONFIRM && !options.skipConfirmAck) {
     const reply = await sendWhatsAppMessage(sender, '👍')
     return { ok: true, intent: intent.intent, replySent: reply.success }
   }
@@ -120,7 +135,7 @@ async function routeWhatsAppMessage(sender, text) {
     return handleHelpIntent(sender, intent)
   }
 
-  return handleUnknownIntent(sender, intent)
+  return handleUnknownIntent(sender, intent, text)
 }
 
 module.exports = {

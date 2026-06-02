@@ -25,10 +25,10 @@ const WEEKDAY_PATTERN =
 function isReminderQueryText(text) {
   return (
     /\b(?:what|which|show|list|tell me|do i have|existing|my)\b/.test(text) &&
-      /\b(?:reminder|reminders|renews?|renewal|renewals|due)\b/.test(text)
+      /\b(?:reminder|reminders)\b/.test(text)
   ) ||
-    /\b(?:tomorrow|tomorrows|upcoming)\b.*\b(?:reminder|reminders|renewal|renewals|subscription|subscriptions)\b/.test(text) ||
-    /\b(?:reminder|reminders|renewal|renewals|subscription|subscriptions)\b.*\b(?:tomorrow|tomorrows|upcoming)\b/.test(text) ||
+    /\b(?:today|tomorrow|tomorrows|upcoming)\b.*\b(?:reminder|reminders)\b/.test(text) ||
+    /\b(?:reminder|reminders)\b.*\b(?:today|tomorrow|tomorrows|upcoming)\b/.test(text) ||
     /\bwhat\s+(?:renews|is due)\s+tomorrow\b/.test(text)
 }
 
@@ -53,6 +53,10 @@ function isReminderCancelText(text) {
 }
 
 function isSubscriptionDeleteText(text) {
+  if (/^(?:delete|cancel|remove)\s+(?:everything|all)\b/i.test(text)) {
+    return false
+  }
+
   return (
     /\b(?:delete|cancel|remove)\b/.test(text) &&
       /\bsubscription\b/.test(text)
@@ -100,6 +104,7 @@ function extractServiceName(text) {
   const patterns = [
     /\b(?:about|for)\s+([a-z0-9+.\s-]+?)\s+(?:subscription|reminder|renewal)\b/i,
     /\b(?:change|update|edit|modify)\s+([a-z0-9+.\s-]+?)\s+(?:amount|renewal|date|subscription)\b/i,
+    /\b(?:update|change)\s+([a-z0-9+.\s-]+?)\s+to\b/i,
     /\b(?:cancel|delete|remove)\s+(?:my\s+)?([a-z0-9+.\s-]+?)\s+(?:reminder|subscription)\b/i,
     /\bstop\s+(?:tracking|reminding me about)\s+([a-z0-9+.\s-]+)/i,
     /^remove\s+([a-z0-9+.\s-]+)$/i,
@@ -137,7 +142,7 @@ function extractAmount(text) {
     return Number(currencyMatch[1])
   }
 
-  const amountToMatch = text.match(/amount\s+to\s+(\d{2,})\b/i)
+  const amountToMatch = text.match(/(?:amount\s+to|to)\s+(\d{2,})\b/i)
   if (amountToMatch) {
     return Number(amountToMatch[1])
   }
@@ -313,6 +318,7 @@ function buildResult(intent, confidence, text, extraEntities = {}) {
   return {
     intent,
     confidence,
+    rawText: text,
     entities: {
       ...(serviceName ? { serviceName } : {}),
       ...(amount ? { amount } : {}),
@@ -379,7 +385,22 @@ function detectIntent(message) {
   }
 
   if (
-    /\b(?:show|list|tell me|what are|my)\b/.test(lower) &&
+    /\bhow many\b/.test(lower) &&
+    /\b(?:subscription|subscriptions)\b/.test(lower)
+  ) {
+    return buildResult(INTENTS.SUBSCRIPTION_QUERY, 0.95, text, { queryType: 'count' })
+  }
+
+  if (/\bwhat\s+renews?\s+next\b/.test(lower)) {
+    return buildResult(INTENTS.SUBSCRIPTION_QUERY, 0.95, text, { queryType: 'renews_next' })
+  }
+
+  if (/\bwhat\s+renews?\s+this\s+month\b/.test(lower)) {
+    return buildResult(INTENTS.SUBSCRIPTION_QUERY, 0.95, text, { queryType: 'renews_month' })
+  }
+
+  if (
+    /\b(?:show|list|tell me|what are|my|tomorrow|today)\b/.test(lower) &&
     /\b(?:subscription|subscriptions)\b/.test(lower)
   ) {
     return buildResult(INTENTS.SUBSCRIPTION_QUERY, 0.92, text)
@@ -395,6 +416,26 @@ function detectIntent(message) {
 
   if (/^[a-z0-9+.\s-]+\s+subscription$/i.test(text)) {
     return buildResult(INTENTS.SUBSCRIPTION_CREATE, 0.75, text)
+  }
+
+  if (/\bdont let me forget\b/i.test(lower) || /\bremind me later\b/i.test(lower)) {
+    return buildResult(INTENTS.REMINDER_CREATE, 0.72, text)
+  }
+
+  if (
+    /\b(?:monthly|yearly|every month)\b/i.test(lower) &&
+    /\b\d{2,}\b/.test(lower) &&
+    !/\bremind\b/i.test(lower)
+  ) {
+    return buildResult(INTENTS.SUBSCRIPTION_CREATE, 0.68, text)
+  }
+
+  if (/^(?:delete|remove|cancel)$/i.test(text)) {
+    return buildResult(INTENTS.SUBSCRIPTION_DELETE, 0.55, text)
+  }
+
+  if (/^change reminder$/i.test(text)) {
+    return buildResult(INTENTS.REMINDER_RESCHEDULE, 0.55, text)
   }
 
   return buildResult(INTENTS.UNKNOWN, 0.35, text)
