@@ -58,7 +58,8 @@ function isSubscriptionDeleteText(text) {
       /\bsubscription\b/.test(text)
   ) ||
     /\bstop tracking\b/.test(text) ||
-    /^remove\s+[a-z0-9+.\s-]+$/.test(text)
+    /^remove\s+[a-z0-9+.\s-]+$/i.test(text) ||
+    /^(?:delete|cancel|remove)\s+[a-z0-9+.\s-]+$/i.test(text)
 }
 
 function titleCase(value) {
@@ -92,14 +93,19 @@ function cleanEntity(value) {
 }
 
 function extractServiceName(text) {
+  if (/\bremind\s+me\s+to\b/i.test(text)) {
+    return null
+  }
+
   const patterns = [
     /\b(?:about|for)\s+([a-z0-9+.\s-]+?)\s+(?:subscription|reminder|renewal)\b/i,
     /\b(?:change|update|edit|modify)\s+([a-z0-9+.\s-]+?)\s+(?:amount|renewal|date|subscription)\b/i,
     /\b(?:cancel|delete|remove)\s+(?:my\s+)?([a-z0-9+.\s-]+?)\s+(?:reminder|subscription)\b/i,
     /\bstop\s+(?:tracking|reminding me about)\s+([a-z0-9+.\s-]+)/i,
     /^remove\s+([a-z0-9+.\s-]+)$/i,
+    /^(?:delete|cancel|remove)\s+([a-z0-9+.\s-]+)$/i,
     /\b(?:remind me(?:\s+tomorrow)?\s+(?:about|to)?|create a reminder for|set a reminder for)\s+([a-z0-9+.\s-]+)/i,
-    /^([a-z0-9+.\s-]+?)\s+renews?\b/i,
+    /^([a-z0-9+.\s-]+)\s+renews?\s+on\b/i,
     /^add\s+([a-z0-9+.\s-]+?)(?:\s+subscription)?$/i,
     /^([a-z0-9+.\s-]+?)\s+(?:monthly|yearly|every\s+\d+\s+months?)\b/i,
     /^([a-z0-9+.\s-]+?)\s+renewal\b/i
@@ -126,8 +132,22 @@ function extractServiceName(text) {
 }
 
 function extractAmount(text) {
-  const amountMatch = text.match(/(?:amount\s+to|to|₹|rs\.?|inr)?\s*(\d{2,})\b/i)
-  return amountMatch ? Number(amountMatch[1]) : null
+  const currencyMatch = text.match(/(?:₹|rs\.?|inr)\s*(\d{2,})\b/i)
+  if (currencyMatch) {
+    return Number(currencyMatch[1])
+  }
+
+  const amountToMatch = text.match(/amount\s+to\s+(\d{2,})\b/i)
+  if (amountToMatch) {
+    return Number(amountToMatch[1])
+  }
+
+  const priceSuffixMatch = text.match(/-\s*(\d{2,})\b/)
+  if (priceSuffixMatch) {
+    return Number(priceSuffixMatch[1])
+  }
+
+  return null
 }
 
 function extractTime(text) {
@@ -380,7 +400,45 @@ function detectIntent(message) {
   return buildResult(INTENTS.UNKNOWN, 0.35, text)
 }
 
+function mergeDateEntities(base, patch) {
+  if (!patch) {
+    return base || null
+  }
+  if (!base) {
+    return patch
+  }
+
+  return {
+    ...base,
+    ...patch,
+    time: patch.time || base.time,
+    period: patch.period || base.period
+  }
+}
+
+function needsExplicitTimePrompt(entities = {}) {
+  const date = entities.date
+  if (!date) {
+    return true
+  }
+  if (date.kind === 'offset' || date.kind === 'time_only') {
+    return false
+  }
+  if (date.time?.source === 'explicit') {
+    return false
+  }
+  if (date.period) {
+    return false
+  }
+  if (date.kind === 'relative' && (date.value === 'today' || date.value === 'tomorrow')) {
+    return true
+  }
+  return false
+}
+
 module.exports = {
   INTENTS,
-  detectIntent
+  detectIntent,
+  mergeDateEntities,
+  needsExplicitTimePrompt
 }

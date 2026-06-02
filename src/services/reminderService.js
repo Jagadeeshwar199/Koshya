@@ -392,17 +392,50 @@ function resolveTriggerAt(dateEntity, now = new Date()) {
   return dateFromIstParts(targetParts)
 }
 
-function cleanReminderSubject(message, serviceName) {
-  if (serviceName) {
+function stripReminderSchedulingWords(text) {
+  return String(text || '')
+    .replace(/\b(?:remind me|create a reminder|set a reminder|add a reminder)\b/gi, ' ')
+    .replace(/\b(?:tomorrow|today|tonight|next week|next month)\b/gi, ' ')
+    .replace(/\b(?:about|for|to|at|on|in|the|a|an)\b/gi, ' ')
+    .replace(/\b(?:morning|afternoon|evening|night)\b/gi, ' ')
+    .replace(/\b(?:next|week|month|sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/gi, ' ')
+    .replace(/\b(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\b/gi, ' ')
+    .replace(/\b(?:on|date)\s+(?:the\s+)?\d{1,2}(?:st|nd|rd|th)?\b/gi, ' ')
+    .replace(/\b\d{1,2}(?:st|nd|rd|th)?\b/gi, ' ')
+    .replace(/\bin\s+\d+\s*(?:minutes?|mins?|hours?|hrs?)\b/gi, ' ')
+    .replace(/\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/gi, ' ')
+    .replace(/\b(?:am|pm)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function extractReminderTitle(message, serviceName) {
+  if (serviceName && !/\bremind\s+me\s+to\b/i.test(message)) {
     return serviceName
   }
 
-  return String(message || '')
-    .replace(/\b(?:remind me|create a reminder|set a reminder|add a reminder|tomorrow|today|about|for|to|at|morning|afternoon|evening|next|week|month|sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/gi, ' ')
-    .replace(/\bin\s+\d+\s*(?:minutes?|mins?|hours?|hrs?)\b/gi, ' ')
-    .replace(/\b\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim() || 'Reminder'
+  const taskMatch = String(message || '').match(/\bremind\s+me\s+(?:to|about)\s+(.+)/i)
+  const rawTitle = taskMatch ? taskMatch[1] : message
+  const title = stripReminderSchedulingWords(rawTitle)
+
+  return title || 'Reminder'
+}
+
+function cleanReminderSubject(message, serviceName) {
+  return extractReminderTitle(message, serviceName)
+}
+
+function dedupeReminders(reminders) {
+  const seen = new Set()
+
+  return reminders.filter((reminder) => {
+    const key = `${normalizeReminderMessage(reminder.message)}|${reminder.triggerAt}`
+    if (seen.has(key)) {
+      return false
+    }
+    seen.add(key)
+    return true
+  })
 }
 
 function normalizeReminderMessage(message) {
@@ -416,7 +449,7 @@ async function createReminderFromIntent({ userPhone, message, entities = {} }) {
     throw new ApiError(400, 'userPhone is required')
   }
 
-  const subject = cleanReminderSubject(message, entities.serviceName)
+  const subject = extractReminderTitle(message, entities.serviceName)
   const triggerAt = resolveTriggerAt(entities.date)
 
   const { data, error } = await supabase
@@ -731,5 +764,8 @@ module.exports = {
   resolveTriggerAt,
   dateFromIstParts,
   getIstPartsFromDate,
-  mapReminderRow
+  mapReminderRow,
+  extractReminderTitle,
+  stripReminderSchedulingWords,
+  dedupeReminders
 }

@@ -1,4 +1,9 @@
 const {
+  detectIntent,
+  mergeDateEntities,
+  needsExplicitTimePrompt
+} = require('../services/intentService')
+const {
   generateReminders,
   createReminderFromIntent,
   updateLatestReminderFromIntent,
@@ -6,7 +11,8 @@ const {
   getPendingReminders,
   getUserReminders,
   markReminderSent,
-  resolveTriggerAt
+  resolveTriggerAt,
+  dedupeReminders
 } = require('../services/reminderService')
 const { getUserSubscriptions } = require('../services/subscriptionService')
 const { matchSubscriptionsByService } = require('../utils/serviceMatcher')
@@ -63,6 +69,23 @@ async function sent(req, res, next) {
 }
 
 async function handleReminderCreateIntent(sender, text, intent) {
+  if (needsExplicitTimePrompt(intent.entities)) {
+    await setState(sender, {
+      action: 'awaiting_reminder_create_time',
+      draftMessage: text
+    })
+    const reply = await sendWhatsAppMessage(
+      sender,
+      `What time should I remind you?\n\nTry:\n7 PM`
+    )
+    return {
+      ok: true,
+      intent: intent.intent,
+      reminder: null,
+      replySent: reply.success
+    }
+  }
+
   const reminder = await createReminderFromIntent({
     userPhone: sender,
     message: text,
@@ -154,6 +177,21 @@ async function handleReminderTimeFollowUp(sender, dateEntity) {
   return { ok: true, intent: 'REMINDER_RESCHEDULE', reminder, replySent: reply.success }
 }
 
+async function handleReminderCreateTimeFollowUp(sender, draftMessage, timeText) {
+  const draftIntent = detectIntent(draftMessage)
+  const timeIntent = detectIntent(timeText)
+  const entities = {
+    ...draftIntent.entities,
+    date: mergeDateEntities(draftIntent.entities.date, timeIntent.entities.date)
+  }
+
+  await clearState(sender)
+  return handleReminderCreateIntent(sender, draftMessage, {
+    ...draftIntent,
+    entities
+  })
+}
+
 async function handleReminderCancelIntent(sender, intent) {
   const result = await cancelReminderFromIntent({
     userPhone: sender,
@@ -212,8 +250,10 @@ async function handleReminderQueryIntent(sender, intent) {
     status: 'pending',
     limit: 50
   })
-  const filteredManualReminders = manualReminders.filter((reminder) =>
-    reminderMatchesDate(reminder, intent.entities.date, now)
+  const filteredManualReminders = dedupeReminders(
+    manualReminders.filter((reminder) =>
+      reminderMatchesDate(reminder, intent.entities.date, now)
+    )
   )
   const subscriptions = await getUserSubscriptions(sender)
   const filteredSubscriptions = matchSubscriptionsByService(subscriptions, serviceName)
@@ -290,6 +330,7 @@ module.exports = {
   handleReminderCancelIntent,
   handleReminderUpdateIntent,
   handleReminderTimeFollowUp,
+  handleReminderCreateTimeFollowUp,
   handleReminderQueryIntent,
   formatReminderConfirmation,
   formatReminderUpdateConfirmation,

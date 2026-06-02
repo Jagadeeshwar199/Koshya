@@ -7,6 +7,7 @@ const tests = [
   'test:intents',
   'test:intent-router',
   'test:reminders',
+  'test:reminder-title',
   'test:reminder-confirmation',
   'test:reminder-query',
   'test:reminder-update',

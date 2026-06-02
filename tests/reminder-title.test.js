@@ -1,0 +1,32 @@
+const assert = require('node:assert/strict')
+
+process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://127.0.0.1:54321'
+process.env.SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'test-key'
+
+const { detectIntent, INTENTS } = require('../src/services/intentService')
+const { extractReminderTitle } = require('../src/services/reminderService')
+
+assert.equal(detectIntent('Delete Spotify').intent, INTENTS.SUBSCRIPTION_DELETE)
+assert.equal(detectIntent('Delete Spotify').entities.serviceName, 'Spotify')
+
+assert.equal(
+  extractReminderTitle('Remind me to call Raj in the evening'),
+  'call Raj'
+)
+
+assert.equal(
+  extractReminderTitle('Remind me to renew driving licence tomorrow'),
+  'renew driving licence'
+)
+
+assert.equal(
+  extractReminderTitle('Remind me to renew Netflix on 27th at 10 am'),
+  'renew Netflix'
+)
+
+assert.equal(
+  detectIntent('Remind me to renew driving licence tomorrow').entities.serviceName,
+  undefined
+)
+
+console.log('Reminder title tests passed: 6')

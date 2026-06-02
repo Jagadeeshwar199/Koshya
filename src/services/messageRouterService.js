@@ -7,6 +7,7 @@ const {
   handleReminderCancelIntent,
   handleReminderUpdateIntent,
   handleReminderTimeFollowUp,
+  handleReminderCreateTimeFollowUp,
   handleReminderQueryIntent
 } = require('../controllers/reminderController')
 const {
@@ -42,6 +43,18 @@ async function routeWhatsAppMessage(sender, text) {
     const intent = detectIntent(text)
     if (intent.entities.date) {
       return handleReminderTimeFollowUp(sender, intent.entities.date)
+    }
+    await clearState(sender)
+  }
+
+  if (pendingState?.action === 'awaiting_reminder_create_time' && pendingState.draftMessage) {
+    const intent = detectIntent(text)
+    if (intent.entities.date) {
+      return handleReminderCreateTimeFollowUp(
+        sender,
+        pendingState.draftMessage,
+        text
+      )
     }
     await clearState(sender)
   }

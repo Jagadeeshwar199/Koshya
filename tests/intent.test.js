@@ -24,6 +24,7 @@ const cases = [
   ['remove reminder', INTENTS.REMINDER_CANCEL],
   ['stop reminding me about exercise', INTENTS.REMINDER_CANCEL],
   ['remove Netflix', INTENTS.SUBSCRIPTION_DELETE],
+  ['Delete Spotify', INTENTS.SUBSCRIPTION_DELETE],
   ['delete Netflix subscription', INTENTS.SUBSCRIPTION_DELETE],
   ['cancel Netflix subscription', INTENTS.SUBSCRIPTION_DELETE],
   ['stop tracking Netflix', INTENTS.SUBSCRIPTION_DELETE],
