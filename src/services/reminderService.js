@@ -297,6 +297,10 @@ function resolveTriggerAt(dateEntity, now = new Date()) {
     minute: reminderTime.minute
   }
 
+  if (dateEntity?.kind === 'offset') {
+    return new Date(now.getTime() + dateEntity.minutes * 60 * 1000)
+  }
+
   if (!dateEntity) {
     const todayDefault = dateFromIstParts(targetParts)
     return todayDefault > now
@@ -395,6 +399,7 @@ function cleanReminderSubject(message, serviceName) {
 
   return String(message || '')
     .replace(/\b(?:remind me|create a reminder|set a reminder|add a reminder|tomorrow|today|about|for|to|at|morning|afternoon|evening|next|week|month|sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/gi, ' ')
+    .replace(/\bin\s+\d+\s*(?:minutes?|mins?|hours?|hrs?)\b/gi, ' ')
     .replace(/\b\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim() || 'Reminder'

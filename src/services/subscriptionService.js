@@ -195,10 +195,40 @@ async function assertCompleteParsedSubscription(parsed) {
 
 async function createSubscriptionRecord(fields) {
   const row = subscriptionToRow(fields)
+  const now = new Date().toISOString()
+
+  const { data: existing, error: findError } = await supabase
+    .from('subscriptions')
+    .select('id')
+    .eq('user_phone', row.user_phone)
+    .eq('active', true)
+    .ilike('service_name', row.service_name)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (findError) {
+    throw new ApiError(502, 'failed to lookup subscription', formatSupabaseError(findError))
+  }
+
+  if (existing?.id) {
+    const { data, error } = await supabase
+      .from('subscriptions')
+      .update({ ...row, active: true, archived_at: null, updated_at: now })
+      .eq('id', existing.id)
+      .select('*')
+      .maybeSingle()
+
+    if (error) {
+      throw new ApiError(502, 'failed to update subscription', formatSupabaseError(error))
+    }
+
+    return mapSubscriptionRow(data)
+  }
 
   const { data, error } = await supabase
     .from('subscriptions')
-    .insert(row)
+    .insert({ ...row, active: true })
     .select('*')
     .maybeSingle()
 

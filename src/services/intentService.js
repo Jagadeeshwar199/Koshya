@@ -177,8 +177,26 @@ function extractPeriod(text) {
   return null
 }
 
+function extractOffset(text) {
+  const match = text.match(/\bin\s+(\d+)\s*(minutes?|mins?|hours?|hrs?)\b/i)
+  if (!match) {
+    return null
+  }
+
+  const amount = Number(match[1])
+  const unit = match[2].toLowerCase()
+  const minutes = /hour|hr/.test(unit) ? amount * 60 : amount
+
+  return { kind: 'offset', minutes }
+}
+
 function extractDate(text) {
   const lower = text.toLowerCase()
+  const offset = extractOffset(text)
+  if (offset) {
+    return offset
+  }
+
   const time = extractTime(text)
   const period = extractPeriod(text)
 

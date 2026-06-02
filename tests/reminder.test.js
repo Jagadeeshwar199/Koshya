@@ -100,4 +100,10 @@ assert.equal(
   'next Monday defaults to 10 AM IST'
 )
 
-console.log('Reminder tests passed: 10')
+assert.equal(
+  triggerIso('remind me to test koshya in 2 minutes'),
+  '2026-05-31T18:27:00.000Z',
+  'in 2 minutes should schedule relative to now'
+)
+
+console.log('Reminder tests passed: 11')
