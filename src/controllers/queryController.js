@@ -206,7 +206,8 @@ NO to cancel`
 }
 
 async function handleHelpIntent(sender, intent) {
-  const reply = await sendWhatsAppMessage(sender, HELP_TEXT)
+  const text = /^(hi|hello|start)$/i.test(intent.rawText || '') ? WELCOME_TEXT : HELP_TEXT
+  const reply = await sendWhatsAppMessage(sender, text)
   return { ok: true, intent: intent.intent, replySent: reply.success }
 }
 

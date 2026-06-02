@@ -14,7 +14,7 @@ Reply help anytime.`
 
 const WELCOME_TEXT = `👋 Hey! I'm Koshya.
 
-I can help you keep track of subscriptions and reminders.
+I help you track subscriptions and reminders.
 
 Try sending:
 
@@ -22,9 +22,7 @@ Netflix renews on 27th every month - 149
 
 or
 
-Remind me to pay rent tomorrow at 8 PM
-
-Type help if you get stuck.`
+Remind me to pay rent tomorrow at 9 PM`
 
 const SUB_SAVED_NEXT = '\n\nNext:\n• Show subscriptions\n• What renews next?'
 const REM_SAVED_NEXT = '\n\nNext:\n• Change to 7 PM\n• Show reminders'
