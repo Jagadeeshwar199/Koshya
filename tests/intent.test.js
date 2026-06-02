@@ -33,6 +33,12 @@ const cases = [
   ['Remind me tomorrow about Netflix', INTENTS.REMINDER_CREATE],
   ['Create a reminder for rent on June 5', INTENTS.REMINDER_CREATE],
   ['Remind me to pay electricity bill', INTENTS.REMINDER_CREATE],
+  [
+    'Remind me to update the warranty for the fans in the evening',
+    INTENTS.REMINDER_CREATE
+  ],
+  ['Remind me to update warranty for fans at 7 pm', INTENTS.REMINDER_CREATE],
+  ['Show today reminders', INTENTS.REMINDER_QUERY],
   ['What reminders do I have?', INTENTS.REMINDER_QUERY],
   ["Tomorrow's reminders", INTENTS.REMINDER_QUERY],
   ['Tomorrows reminders', INTENTS.REMINDER_QUERY],
@@ -69,4 +75,7 @@ const update = detectIntent('Change Netflix amount to 199')
 assert.equal(update.entities.serviceName, 'Netflix')
 assert.equal(update.entities.amount, 199)
 
-console.log('Intent tests passed:', cases.length + 2)
+assert.equal(detectIntent('7 pm').intent, INTENTS.UNKNOWN)
+assert.equal(detectIntent('Okay').intent, INTENTS.CONFIRM)
+
+console.log('Intent tests passed:', cases.length + 4)

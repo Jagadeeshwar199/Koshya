@@ -11,7 +11,7 @@ const {
 const { getUserSubscriptions } = require('../services/subscriptionService')
 const { matchSubscriptionsByService } = require('../utils/serviceMatcher')
 const { sendWhatsAppMessage } = require('../services/whatsappService')
-const { setState } = require('../services/conversationStateService')
+const { setState, clearState } = require('../services/conversationStateService')
 const { PAGE_SIZE } = require('./paginationController')
 const {
   formatReminderConfirmation,
@@ -84,6 +84,7 @@ async function handleReminderCreateIntent(sender, text, intent) {
 
 async function handleReminderUpdateIntent(sender, intent) {
   if (!intent.entities.date) {
+    await setState(sender, { action: 'awaiting_reminder_time' })
     const reply = await sendWhatsAppMessage(
       sender,
       `What time should I use?\n\nTry:\nchange to 7 PM`
@@ -116,6 +117,7 @@ async function handleReminderUpdateIntent(sender, intent) {
     }
   }
 
+  await clearState(sender)
   const reply = await sendWhatsAppMessage(
     sender,
     formatReminderUpdateConfirmation(reminder)
@@ -127,6 +129,29 @@ async function handleReminderUpdateIntent(sender, intent) {
     reminder,
     replySent: reply.success
   }
+}
+
+async function handleReminderTimeFollowUp(sender, dateEntity) {
+  const reminder = await updateLatestReminderFromIntent({
+    userPhone: sender,
+    entities: { date: dateEntity }
+  })
+
+  if (!reminder) {
+    await clearState(sender)
+    const reply = await sendWhatsAppMessage(
+      sender,
+      `I couldn't find an active reminder to update.`
+    )
+    return { ok: true, intent: 'REMINDER_RESCHEDULE', reminder: null, replySent: reply.success }
+  }
+
+  await clearState(sender)
+  const reply = await sendWhatsAppMessage(
+    sender,
+    formatReminderUpdateConfirmation(reminder)
+  )
+  return { ok: true, intent: 'REMINDER_RESCHEDULE', reminder, replySent: reply.success }
 }
 
 async function handleReminderCancelIntent(sender, intent) {
@@ -264,6 +289,7 @@ module.exports = {
   handleReminderCreateIntent,
   handleReminderCancelIntent,
   handleReminderUpdateIntent,
+  handleReminderTimeFollowUp,
   handleReminderQueryIntent,
   formatReminderConfirmation,
   formatReminderUpdateConfirmation,

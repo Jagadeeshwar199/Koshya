@@ -1,10 +1,12 @@
 const { INTENTS, detectIntent } = require('./intentService')
 const { handleSubscriptionMessage } = require('./subscriptionFlowService')
-const { getState } = require('./conversationStateService')
+const { getState, clearState } = require('./conversationStateService')
+const { sendWhatsAppMessage } = require('./whatsappService')
 const {
   handleReminderCreateIntent,
   handleReminderCancelIntent,
   handleReminderUpdateIntent,
+  handleReminderTimeFollowUp,
   handleReminderQueryIntent
 } = require('../controllers/reminderController')
 const {
@@ -36,7 +38,20 @@ async function routeWhatsAppMessage(sender, text) {
     }
   }
 
+  if (pendingState?.action === 'awaiting_reminder_time') {
+    const intent = detectIntent(text)
+    if (intent.entities.date) {
+      return handleReminderTimeFollowUp(sender, intent.entities.date)
+    }
+    await clearState(sender)
+  }
+
   const intent = detectIntent(text)
+
+  if (intent.intent === INTENTS.CONFIRM) {
+    const reply = await sendWhatsAppMessage(sender, '👍')
+    return { ok: true, intent: intent.intent, replySent: reply.success }
+  }
 
   logger.info('intent.detected', {
     userPhone: sender,

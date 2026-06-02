@@ -33,6 +33,10 @@ function isReminderQueryText(text) {
 }
 
 function isReminderUpdateText(text) {
+  if (/\bremind\s+me\b/.test(text)) {
+    return false
+  }
+
   return /\b(?:change|make|set|move|update|reschedule)\b/.test(text) &&
     (
       /\b(?:reminder|it)\b/.test(text) ||
@@ -103,6 +107,14 @@ function extractServiceName(text) {
 
   for (const pattern of patterns) {
     const match = text.match(pattern)
+
+    if (
+      pattern.source.includes('remind me') &&
+      /\bremind\s+me\s+to\b/i.test(text)
+    ) {
+      continue
+    }
+
     const serviceName = cleanEntity(match?.[1])
 
     if (serviceName) {
@@ -288,7 +300,7 @@ function detectIntent(message) {
     return buildResult(INTENTS.LIST_MORE, 0.99, text)
   }
 
-  if (/^(yes|confirm|ok)$/i.test(text)) {
+  if (/^(yes|confirm|ok|okay|k)$/i.test(text)) {
     return buildResult(INTENTS.CONFIRM, 0.99, text)
   }
 
@@ -302,6 +314,10 @@ function detectIntent(message) {
 
   if (isSubscriptionDeleteText(lower)) {
     return buildResult(INTENTS.SUBSCRIPTION_DELETE, 0.94, text)
+  }
+
+  if (/\b(?:remind me|create a reminder|set a reminder|add a reminder)\b/.test(lower)) {
+    return buildResult(INTENTS.REMINDER_CREATE, 0.93, text)
   }
 
   if (isReminderUpdateText(lower)) {
@@ -322,10 +338,6 @@ function detectIntent(message) {
     !/\b(?:remind me|create|add|set)\b/.test(lower)
   ) {
     return buildResult(INTENTS.REMINDER_QUERY, 0.92, text)
-  }
-
-  if (/\b(?:remind me|create a reminder|set a reminder|add a reminder)\b/.test(lower)) {
-    return buildResult(INTENTS.REMINDER_CREATE, 0.93, text)
   }
 
   if (

@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict')
 
+process.env.TZ = 'UTC'
 process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://127.0.0.1:54321'
 process.env.SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'test-key'
 
