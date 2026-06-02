@@ -44,10 +44,19 @@ function verifyWebhookSignature(req, res, next) {
     req.get('x-gupshup-signature')
 
   if (!signature) {
-    if (req.body?.type === 'message' || process.env.WEBHOOK_ALLOW_UNSIGNED === 'true') {
-      logger.warn('webhook.unsigned_allowed', { requestId: req.requestId })
+    const hasInboundMessage = Boolean(
+      req.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0] ||
+      (req.body?.type === 'message' && req.body?.payload)
+    )
+
+    if (hasInboundMessage || process.env.WEBHOOK_ALLOW_UNSIGNED === 'true') {
+      logger.warn('webhook.unsigned_allowed', {
+        requestId: req.requestId,
+        hasInboundMessage
+      })
       return next()
     }
+
     logger.warn('webhook.missing_signature', { requestId: req.requestId })
     return next(new ApiError(401, 'Missing webhook signature'))
   }
