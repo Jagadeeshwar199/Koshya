@@ -197,7 +197,7 @@ async function createSubscriptionRecord(fields) {
   const row = subscriptionToRow(fields)
   const now = new Date().toISOString()
 
-  const { data: existing, error: findError } = await supabase
+  const { data: matches, error: findError } = await supabase
     .from('subscriptions')
     .select('id')
     .eq('user_phone', row.user_phone)
@@ -205,11 +205,12 @@ async function createSubscriptionRecord(fields) {
     .ilike('service_name', row.service_name)
     .order('created_at', { ascending: false })
     .limit(1)
-    .maybeSingle()
 
   if (findError) {
     throw new ApiError(502, 'failed to lookup subscription', formatSupabaseError(findError))
   }
+
+  const existing = matches?.[0]
 
   if (existing?.id) {
     const { data, error } = await supabase
@@ -231,6 +232,45 @@ async function createSubscriptionRecord(fields) {
     .insert({ ...row, active: true })
     .select('*')
     .maybeSingle()
+
+  if (error?.code === '23505' && existing?.id) {
+    const { data, error: updateError } = await supabase
+      .from('subscriptions')
+      .update({ ...row, active: true, archived_at: null, updated_at: now })
+      .eq('id', existing.id)
+      .select('*')
+      .maybeSingle()
+
+    if (updateError) {
+      throw new ApiError(502, 'failed to update subscription', formatSupabaseError(updateError))
+    }
+
+    return mapSubscriptionRow(data)
+  }
+
+  if (error?.code === '23505') {
+    const { data: conflictRows } = await supabase
+      .from('subscriptions')
+      .select('id')
+      .eq('user_phone', row.user_phone)
+      .eq('active', true)
+      .ilike('service_name', row.service_name)
+      .limit(1)
+
+    const conflictId = conflictRows?.[0]?.id
+    if (conflictId) {
+      const { data, error: updateError } = await supabase
+        .from('subscriptions')
+        .update({ ...row, active: true, archived_at: null, updated_at: now })
+        .eq('id', conflictId)
+        .select('*')
+        .maybeSingle()
+
+      if (!updateError) {
+        return mapSubscriptionRow(data)
+      }
+    }
+  }
 
   if (error) {
     throw new ApiError(502, 'failed to create subscription', formatSupabaseError(error))

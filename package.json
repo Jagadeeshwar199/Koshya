@@ -1,6 +1,6 @@
 {
   "name": "koshya-bot",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "WhatsApp subscription and reminder bot",
   "main": "server.js",
   "scripts": {
