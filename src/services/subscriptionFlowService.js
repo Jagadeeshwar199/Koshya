@@ -12,7 +12,7 @@ const {
 } = require('./pendingSubscriptionService')
 const { sendWhatsAppMessage } = require('./whatsappService')
 const { computeNextRenewalDate } = require('./reminderService')
-const { SUB_SAVED_NEXT } = require('../utils/uxMessages')
+const { formatSubscriptionAdded } = require('../formatters/subscriptionFormatter')
 const logger = require('../../utils/logger')
 
 function buildQuestions(missing) {
@@ -47,12 +47,7 @@ function formatSaved(parsed) {
       })
     : parsed.renewalDay
 
-  return `✅ Added
-
-${parsed.serviceName}
-₹${parsed.amount}/${parsed.recurrence === 'monthly' ? 'month' : parsed.recurrence}
-
-Renews ${renewalLabel}${SUB_SAVED_NEXT}`
+  return formatSubscriptionAdded(parsed, renewalLabel)
 }
 
 async function saveAndReply(sender, parsed) {

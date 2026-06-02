@@ -1,5 +1,7 @@
 const { computeNextRenewalDate, resolveTriggerAt } = require('../services/reminderService')
 
+const { REM_SAVED_NEXT } = require('../utils/uxMessages')
+
 function getIstParts(date) {
   const formatter = new Intl.DateTimeFormat('en-IN', {
     timeZone: 'Asia/Kolkata',
@@ -72,23 +74,20 @@ function formatReminderConfirmation(reminder, now = new Date()) {
   return `✅ Reminder set
 
 ${reminder.message}
-${formatted.dateLabel}, ${formatted.timeLabel}
-
-Reply:
-change to 7 PM`
+${formatted.dateLabel}, ${formatted.timeLabel}${REM_SAVED_NEXT}`
 }
 
 function formatReminderUpdateConfirmation(reminder, now = new Date()) {
   const formatted = formatReminderTime(reminder.triggerAt, now)
 
-  return `✅ Updated
+  return `✅ Reminder updated
 
 ${reminder.message}
-${formatted.dateLabel}, ${formatted.timeLabel}`
+${formatted.dateLabel}, ${formatted.timeLabel}${REM_SAVED_NEXT}`
 }
 
 function formatReminderCancelConfirmation(reminder) {
-  return `✅ Cancelled
+  return `✅ Reminder removed
 
 ${reminder.message}`
 }

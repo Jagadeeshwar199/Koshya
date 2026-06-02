@@ -24,8 +24,8 @@ or
 
 Remind me to pay rent tomorrow at 9 PM`
 
-const SUB_SAVED_NEXT = '\n\nNext:\n• Show subscriptions\n• What renews next?'
-const REM_SAVED_NEXT = '\n\nNext:\n• Change to 7 PM\n• Show reminders'
+const SUB_SAVED_NEXT = '\n\nYou can:\n• Show subscriptions\n• What renews next?'
+const REM_SAVED_NEXT = '\n\nYou can:\n• Change to 7 PM\n• Show reminders'
 
 function clarifyLowConfidence(intent) {
   const map = {

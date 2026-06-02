@@ -17,9 +17,7 @@ const {
 const { sendWhatsAppMessage } = require('../services/whatsappService')
 const { setState, clearState } = require('../services/conversationStateService')
 const { PAGE_SIZE } = require('./paginationController')
-const { REM_SAVED_NEXT } = require('../utils/uxMessages')
-const {
-  formatReminderConfirmation,
+const { formatReminderConfirmation,
   formatReminderUpdateConfirmation,
   formatReminderCancelConfirmation,
   formatManualReminderSummary,
@@ -90,7 +88,7 @@ async function handleReminderCreateIntent(sender, text, intent) {
 
   const reply = await sendWhatsAppMessage(
     sender,
-    `${formatReminderConfirmation(reminder)}${REM_SAVED_NEXT}`
+    formatReminderConfirmation(reminder)
   )
 
   return {

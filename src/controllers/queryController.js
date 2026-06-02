@@ -9,9 +9,10 @@ const { sendWhatsAppMessage } = require('../services/whatsappService')
 const { setState } = require('../services/conversationStateService')
 const {
   formatSubscription,
-  formatSubscriptionOption
+  formatSubscriptionOption,
+  formatSubscriptionUpdated
 } = require('../formatters/subscriptionFormatter')
-const { HELP_TEXT, WELCOME_TEXT, SUB_SAVED_NEXT, clarifyLowConfidence, unknownReply } = require('../utils/uxMessages')
+const { HELP_TEXT, WELCOME_TEXT, clarifyLowConfidence, unknownReply } = require('../utils/uxMessages')
 const { PAGE_SIZE } = require('./paginationController')
 
 async function handleSubscriptionQueryIntent(sender, intent) {
@@ -124,7 +125,7 @@ async function handleSubscriptionUpdateIntent(sender, intent) {
   const updated = await updateSubscription(matches[0].id, updates)
   const reply = await sendWhatsAppMessage(
     sender,
-    `✅ Updated\n\n${formatSubscription(updated)}`
+    formatSubscriptionUpdated(updated)
   )
 
   return { ok: true, intent: intent.intent, subscription: updated, replySent: reply.success }
