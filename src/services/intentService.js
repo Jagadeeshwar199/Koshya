@@ -203,16 +203,22 @@ function extractPeriod(text) {
 }
 
 function extractOffset(text) {
-  const match = text.match(/\bin\s+(\d+)\s*(minutes?|mins?|hours?|hrs?)\b/i)
+  const match = text.match(
+    /\b(?:in|after)\s+(\d+)\s*(minutes?|mins?|hours?|hrs?|days?)\b/i
+  )
   if (!match) {
     return null
   }
 
   const amount = Number(match[1])
   const unit = match[2].toLowerCase()
-  const minutes = /hour|hr/.test(unit) ? amount * 60 : amount
-
-  return { kind: 'offset', minutes }
+  if (/day/.test(unit)) {
+    return { kind: 'offset', minutes: amount * 24 * 60 }
+  }
+  if (/hour|hr/.test(unit)) {
+    return { kind: 'offset', minutes: amount * 60 }
+  }
+  return { kind: 'offset', minutes: amount }
 }
 
 function extractDate(text) {
@@ -436,6 +442,13 @@ function detectIntent(message) {
 
   if (/^change reminder$/i.test(text)) {
     return buildResult(INTENTS.REMINDER_RESCHEDULE, 0.55, text)
+  }
+
+  if (
+    /\b(?:in|after)\s+\d+\s*(?:minutes?|mins?|hours?|hrs?|days?)\b/i.test(lower) &&
+    !/\b(?:renews?|monthly|yearly)\b/i.test(lower)
+  ) {
+    return buildResult(INTENTS.REMINDER_CREATE, 0.85, text)
   }
 
   return buildResult(INTENTS.UNKNOWN, 0.35, text)

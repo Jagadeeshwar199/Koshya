@@ -4,12 +4,13 @@ process.env.TZ = 'UTC'
 process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://127.0.0.1:54321'
 process.env.SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'test-key'
 
+const { detectIntent, needsExplicitTimePrompt } = require('../src/services/intentService')
 const {
   computeNextRenewalDate,
   computeReminderRenewalDate,
-  resolveTriggerAt
+  resolveTriggerAt,
+  extractReminderTitle
 } = require('../src/services/reminderService')
-const { detectIntent } = require('../src/services/intentService')
 
 function isoDate(date) {
   return date.toISOString().slice(0, 10)
@@ -106,4 +107,32 @@ assert.equal(
   'in 2 minutes should schedule relative to now'
 )
 
-console.log('Reminder tests passed: 11')
+assert.equal(
+  triggerIso('Remind me to drink water after 2 minutes'),
+  '2026-05-31T18:27:00.000Z',
+  'after 2 minutes should schedule relative to now'
+)
+
+const offsetCases = [
+  ['after 10 mins', 10],
+  ['in 1 hour', 60],
+  ['after 3 hours', 180],
+  ['in 30 minutes', 30],
+  ['after 1 day', 1440],
+  ['in 2 days', 2880]
+]
+
+for (const [phrase, minutes] of offsetCases) {
+  const intent = detectIntent(`Remind me to drink water ${phrase}`)
+  assert.equal(intent.entities.date.kind, 'offset', phrase)
+  assert.equal(intent.entities.date.minutes, minutes, phrase)
+  assert.equal(!needsExplicitTimePrompt(intent.entities), true, phrase)
+}
+
+assert.equal(
+  extractReminderTitle('Remind me to drink water after 2 minutes'),
+  'drink water'
+)
+assert.equal(extractReminderTitle('Call mom in 1 hour'), 'Call mom')
+
+console.log('Reminder tests passed:', 11 + offsetCases.length + 2)

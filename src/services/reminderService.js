@@ -402,7 +402,7 @@ function stripReminderSchedulingWords(text) {
     .replace(/\b(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\b/gi, ' ')
     .replace(/\b(?:on|date)\s+(?:the\s+)?\d{1,2}(?:st|nd|rd|th)?\b/gi, ' ')
     .replace(/\b\d{1,2}(?:st|nd|rd|th)?\b/gi, ' ')
-    .replace(/\bin\s+\d+\s*(?:minutes?|mins?|hours?|hrs?)\b/gi, ' ')
+    .replace(/\b(?:in|after)\s+\d+\s*(?:minutes?|mins?|hours?|hrs?|days?)\b/gi, ' ')
     .replace(/\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/gi, ' ')
     .replace(/\b(?:am|pm)\b/gi, ' ')
     .replace(/\s+/g, ' ')
@@ -412,6 +412,16 @@ function stripReminderSchedulingWords(text) {
 function extractReminderTitle(message, serviceName) {
   if (serviceName && !/\bremind\s+me\s+to\b/i.test(message)) {
     return serviceName
+  }
+
+  const offsetLead = String(message || '').match(
+    /^(.+?)\s+(?:in|after)\s+\d+\s*(?:minutes?|mins?|hours?|hrs?|days?)\b/i
+  )
+  if (offsetLead?.[1]) {
+    const title = stripReminderSchedulingWords(offsetLead[1])
+    if (title) {
+      return title
+    }
   }
 
   const taskMatch = String(message || '').match(/\bremind\s+me\s+(?:to|about)\s+(.+)/i)
