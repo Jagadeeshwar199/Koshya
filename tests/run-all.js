@@ -9,6 +9,7 @@ const tests = [
   'test:reminders',
   'test:reminder-title',
   'test:reminder-schedule',
+  'test:subscription-display',
   'test:reminder-confirmation',
   'test:reminder-query',
   'test:reminder-update',

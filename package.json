@@ -20,6 +20,7 @@
     "test:reminders": "node tests/reminder.test.js",
     "test:reminder-title": "node tests/reminder-title.test.js",
     "test:reminder-schedule": "node tests/reminder-schedule.test.js",
+    "test:subscription-display": "node tests/subscription-display.test.js",
     "test:parser": "node tests/parser.test.js",
     "test:parser:sheet": "node tests/user-test-sheet.js"
   },

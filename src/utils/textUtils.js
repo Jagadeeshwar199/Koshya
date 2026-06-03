@@ -1,3 +1,11 @@
+function applyTypoFixes(text) {
+  return String(text)
+    .replace(/\brenewls\b|\brenewes\b|\brenws\b|\brnews\b/gi, 'renews')
+    .replace(/\bsubscritpion\b|\bsubscriuption\b/gi, 'subscription')
+    .replace(/\bremiander\b/gi, 'reminder')
+    .replace(/\btomorw\b|\btmrw\b/gi, 'tomorrow')
+}
+
 function normalizeText(text) {
   return String(text || '')
     .trim()
@@ -28,5 +36,6 @@ function normalizeForIntentMatch(text) {
 module.exports = {
   normalizeText,
   normalizeParserText,
-  normalizeForIntentMatch
+  normalizeForIntentMatch,
+  applyTypoFixes
 }

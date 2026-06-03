@@ -3,8 +3,16 @@ const MONTH_PATTERN =
 
 const AMOUNT = '(?:₹|rs\\.?|inr\\s*)?(\\d+)'
 
-function normalizeText(text) {
+function applyTypoFixes(text) {
   return String(text)
+    .replace(/\brenewls\b|\brenewes\b|\brenws\b|\brnews\b/gi, 'renews')
+    .replace(/\bsubscritpion\b|\bsubscriuption\b/gi, 'subscription')
+    .replace(/\bremiander\b/gi, 'reminder')
+    .replace(/\btomorw\b|\btmrw\b/gi, 'tomorrow')
+}
+
+function normalizeText(text) {
+  return applyTypoFixes(String(text)
     .trim()
     .replace(/[\u2013\u2014\u2212–—]/g, '-')
     .replace(/,/g, ' ')
@@ -14,7 +22,7 @@ function normalizeText(text) {
     .replace(/\s*-\s*/g, ' - ')
     .replace(/:(?=\s*\d)/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim()
+    .trim())
 }
 
 function cleanServiceName(name) {
@@ -36,19 +44,33 @@ function cleanServiceName(name) {
 }
 
 function subscriptionResult(fields) {
+  const recurrence = fields.recurrence
   return {
     success: true,
     type: 'subscription',
     serviceName: cleanServiceName(fields.serviceName),
     renewalDay: fields.renewalDay ?? null,
-    renewalMonth: fields.renewalMonth ?? null,
-    recurrence: fields.recurrence,
+    renewalMonth: recurrence === 'monthly' ? null : fields.renewalMonth ?? null,
+    recurrence,
     amount: fields.amount
   }
 }
 
 function tryPatterns(text) {
   const patterns = [
+    {
+      regex: new RegExp(
+        `^(.+?) renews on (\\d{1,2})(?:st|nd|rd|th)?\\s+(${MONTH_PATTERN})\\s+(monthly|yearly)(?:\\s*-?\\s*${AMOUNT})?\\s*$`,
+        'i'
+      ),
+      map: (m) => ({
+        serviceName: m[1],
+        renewalDay: Number(m[2]),
+        renewalMonth: m[4].toLowerCase() === 'yearly' ? m[3] : null,
+        recurrence: m[4].toLowerCase(),
+        amount: m[5] ? Number(m[5]) : null
+      })
+    },
     {
       regex: new RegExp(
         `^(.+?) renews on (\\d{1,2})(?:st|nd|rd|th)? every month(?:\\s*-)?\\s*${AMOUNT}\\s*$`,
@@ -339,7 +361,7 @@ function extractAmount(text, renewalDay) {
   })
 
   if (!filtered.length) {
-    return matches[matches.length - 1]
+    return null
   }
 
   return filtered[filtered.length - 1]

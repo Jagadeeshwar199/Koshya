@@ -11,7 +11,6 @@ const {
   clearPending
 } = require('./pendingSubscriptionService')
 const { sendWhatsAppMessage } = require('./whatsappService')
-const { computeNextRenewalDate } = require('./reminderService')
 const { formatSubscriptionAdded } = require('../formatters/subscriptionFormatter')
 const logger = require('../../utils/logger')
 
@@ -35,19 +34,7 @@ function buildQuestions(missing) {
 }
 
 function formatSaved(parsed) {
-  const renewalDate = computeNextRenewalDate({
-    renewal_day: parsed.renewalDay,
-    renewal_month: parsed.renewalMonth,
-    recurrence: parsed.recurrence
-  })
-  const renewalLabel = renewalDate
-    ? renewalDate.toLocaleDateString('en-IN', {
-        day: 'numeric',
-        month: 'short'
-      })
-    : parsed.renewalDay
-
-  return formatSubscriptionAdded(parsed, renewalLabel)
+  return formatSubscriptionAdded(parsed)
 }
 
 async function saveAndReply(sender, parsed) {

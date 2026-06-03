@@ -1,4 +1,8 @@
-const { normalizeText, normalizeForIntentMatch } = require('../utils/textUtils')
+const {
+  normalizeText,
+  normalizeForIntentMatch,
+  applyTypoFixes
+} = require('../utils/textUtils')
 
 const INTENTS = {
   SUBSCRIPTION_CREATE: 'SUBSCRIPTION_CREATE',
@@ -335,7 +339,7 @@ function buildResult(intent, confidence, text, extraEntities = {}) {
 }
 
 function detectIntent(message) {
-  const text = normalizeText(message)
+  const text = normalizeText(applyTypoFixes(message))
   const lower = normalizeForIntentMatch(text)
 
   if (!text) {
