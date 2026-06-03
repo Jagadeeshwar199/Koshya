@@ -1,7 +1,18 @@
 const axios = require('axios')
 const logger = require('../../utils/logger')
 
+let outboundCapture = null
+
+function setOutboundCapture(fn) {
+  outboundCapture = typeof fn === 'function' ? fn : null
+}
+
+function clearOutboundCapture() {
+  outboundCapture = null
+}
+
 async function sendWhatsAppMessage(phone, text) {
+  if (outboundCapture) outboundCapture(text)
   const source = process.env.GUPSHUP_SOURCE_PHONE
 
   if (!source) {
@@ -66,5 +77,7 @@ async function sendWhatsAppMessage(phone, text) {
 }
 
 module.exports = {
-  sendWhatsAppMessage
+  sendWhatsAppMessage,
+  setOutboundCapture,
+  clearOutboundCapture
 }

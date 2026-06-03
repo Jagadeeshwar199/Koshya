@@ -27,6 +27,12 @@ const {
   handleListMore
 } = require('../controllers/paginationController')
 const logger = require('../../utils/logger')
+const {
+  isAdminPhone,
+  parseAdminCommand,
+  handleParserAdminCommand,
+  logIncomingMessage
+} = require('./parserTelemetryService')
 
 async function routeDetectedIntent(sender, text, intent, options = {}) {
   if (intent.entities.clarify === 'short') {
@@ -108,6 +114,14 @@ async function routeDetectedIntent(sender, text, intent, options = {}) {
 }
 
 async function routeWhatsAppMessage(sender, text, options = {}) {
+  const adminCmd = parseAdminCommand(text)
+  if (adminCmd && isAdminPhone(sender)) {
+    return handleParserAdminCommand(sender, adminCmd)
+  }
+  return logIncomingMessage(sender, text, () => routeWhatsAppMessageCore(sender, text, options))
+}
+
+async function routeWhatsAppMessageCore(sender, text, options = {}) {
   const pendingState = await getState(sender)
 
   if (pendingState?.action === 'confirm_delete') {

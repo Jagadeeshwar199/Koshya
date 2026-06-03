@@ -5,7 +5,11 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ||
 const sent = []
 const db = { reminders: [{ id: 'r1', message: 'go to the toilet', triggerAt: new Date().toISOString(), status: 'pending' }], archived: [] }
 require.cache[require.resolve('../src/services/whatsappService')] = {
-  exports: { sendWhatsAppMessage: async (_s, body) => { sent.push(body); return { success: true } } }
+  exports: {
+    sendWhatsAppMessage: async (_s, body) => { sent.push(body); return { success: true } },
+    setOutboundCapture: () => {},
+    clearOutboundCapture: () => {}
+  }
 }
 require.cache[require.resolve('../src/services/conversationStateService')] = {
   exports: { getState: async () => null, setState: async () => {}, clearState: async () => {} }
