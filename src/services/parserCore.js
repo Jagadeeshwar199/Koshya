@@ -385,6 +385,11 @@ function extractRenewal(text) {
   const monthDay = text.match(
     new RegExp(`(${MONTH_PATTERN})\\s+(\\d{1,2})`, 'i')
   )
+  const dayMonth = text.match(
+    new RegExp(`(\\d{1,2})\\s*(?:st|nd|rd|th)?\\s*(${MONTH_PATTERN})\\b`, 'i')
+  )
+  const dayOnly = text.match(/^(\d{1,2})(?:st|nd|rd|th)?$/i)
+  const everyMonth = text.match(/(\d{1,2})(?:st|nd|rd|th)?\s+every\s+month/i)
 
   if (renewsMonthDay) {
     renewalMonth = renewsMonthDay[1]
@@ -398,9 +403,16 @@ function extractRenewal(text) {
     renewalDay = Number(onThe[1])
   } else if (onDay) {
     renewalDay = Number(onDay[1])
+  } else if (dayMonth) {
+    renewalDay = Number(dayMonth[1])
+    renewalMonth = dayMonth[2]
   } else if (monthDay) {
     renewalMonth = monthDay[1]
     renewalDay = Number(monthDay[2])
+  } else if (everyMonth) {
+    renewalDay = Number(everyMonth[1])
+  } else if (dayOnly) {
+    renewalDay = Number(dayOnly[1])
   }
 
   return { renewalDay, renewalMonth }
@@ -409,6 +421,16 @@ function extractRenewal(text) {
 function extractServiceName(text) {
   if (/^\d/.test(text)) {
     return null
+  }
+
+  const renewService = text.match(/^renew(?:s)?\s+(?:the\s+)?([a-z0-9+][a-z0-9+.-]*)\b/i)
+  if (renewService) {
+    return cleanServiceName(renewService[1])
+  }
+
+  const svcRec = text.match(/^(.+?)\s+(monthly|yearly)\s*$/i)
+  if (svcRec) {
+    return cleanServiceName(svcRec[1])
   }
 
   const intentPatterns = [
@@ -432,7 +454,8 @@ function extractServiceName(text) {
   if (
     /^[a-z0-9+][a-z0-9+\s.-]{0,40}$/i.test(text) &&
     !/^(monthly|yearly|renewal reminder|\d+)$/i.test(lower) &&
-    !extractRecurrence(text)
+    !extractRecurrence(text) &&
+    !/\s+\d{2,}\s*$/.test(text)
   ) {
     return cleanServiceName(text)
   }
@@ -442,10 +465,17 @@ function extractServiceName(text) {
 
 function extractPartial(text) {
   const { renewalDay, renewalMonth } = extractRenewal(text)
+  const nameAmount = text.match(
+    /^([a-z0-9+][a-z0-9+\s.-]{0,30}?)\s+(\d{2,})$/i
+  )
 
   return {
-    serviceName: extractServiceName(text),
-    amount: extractAmount(text, renewalDay),
+    serviceName: nameAmount
+      ? cleanServiceName(nameAmount[1])
+      : extractServiceName(text),
+    amount: nameAmount
+      ? Number(nameAmount[2])
+      : extractAmount(text, renewalDay),
     recurrence: extractRecurrence(text),
     renewalDay,
     renewalMonth

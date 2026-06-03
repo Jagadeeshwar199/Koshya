@@ -1,5 +1,6 @@
 const { INTENTS, detectIntent } = require('./intentService')
 const { handleSubscriptionMessage } = require('./subscriptionFlowService')
+const { getPending } = require('./pendingSubscriptionService')
 const { getState, clearState } = require('./conversationStateService')
 const { sendWhatsAppMessage } = require('./whatsappService')
 const {
@@ -138,6 +139,12 @@ async function routeWhatsAppMessage(sender, text, options = {}) {
 
   if (intent.intent === INTENTS.HELP) {
     return handleHelpIntent(sender, intent)
+  }
+
+  const pendingSubscription = await getPending(sender)
+  if (pendingSubscription) {
+    const result = await handleSubscriptionMessage(sender, text)
+    return { ...result, intent: INTENTS.SUBSCRIPTION_CREATE }
   }
 
   return handleUnknownIntent(sender, intent, text)
