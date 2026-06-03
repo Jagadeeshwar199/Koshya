@@ -50,6 +50,9 @@ function isReminderUpdateText(text) {
   if (/\bremind\s+me\b/.test(text)) {
     return false
   }
+  if (/\bexpiry\b/i.test(text) && !/\breminder\b/i.test(text)) {
+    return false
+  }
 
   return (
     /\b(?:change|make|set|move|update|reschedule)\b/.test(text) &&
@@ -284,6 +287,12 @@ function scoreSignals(text, lower, entities, threshold) {
   if (/\bhow many\b/.test(lower) && subscriptionSemantic > 0.3) {
     scores[INTENTS.SUBSCRIPTION_QUERY] = 0.95
   }
+
+  if (/\bexpir(?:ing|es?)\s+soon\b/i.test(lower) || /\bwhat\s+is\s+expir/i.test(lower)) {
+    scores[INTENTS.SUBSCRIPTION_QUERY] = 0.96
+    scores[INTENTS.REMINDER_QUERY] = 0.3
+    scores[INTENTS.SUBSCRIPTION_EXPIRY] = 0.32
+  }
   if (/\bwhat\s+renews?\s+next\b/.test(lower)) {
     scores[INTENTS.SUBSCRIPTION_QUERY] = 0.95
   }
@@ -433,9 +442,10 @@ function scoreSignals(text, lower, entities, threshold) {
   if (
     /\b(?:update|change)\b/i.test(lower) &&
     entities.serviceName &&
-    (entities.amount || /\bamount\b/i.test(lower))
+    (entities.amount || /\bamount\b/i.test(lower) || /\bexpiry\b/i.test(lower))
   ) {
     scores[INTENTS.SUBSCRIPTION_UPDATE] = 0.93
+    scores[INTENTS.REMINDER_RESCHEDULE] = 0.3
   }
 
   if (
@@ -842,7 +852,7 @@ function resolveQueryType(text, lower, intent) {
   if (/\bwhat\s+renews?\s+this\s+month\b/.test(lower)) {
     return { queryType: 'renews_month' }
   }
-  if (intent === INTENTS.SUBSCRIPTION_EXPIRY) {
+  if (intent === INTENTS.SUBSCRIPTION_EXPIRY || /\bexpir(?:ing|es?)\s+soon\b/i.test(lower)) {
     return { queryType: 'expiry' }
   }
   return {}
@@ -855,7 +865,9 @@ function isExplicitQuery(lower) {
       /\b(?:today|tomorrow|tomorrows|upcoming)\b/i.test(lower) &&
       !/\bremind\s+me\b/i.test(lower) &&
       !/\b(?:change|move|update|reschedule)\b/i.test(lower)) ||
-    (/\breminder\b/i.test(lower) && /\b(?:show|list|what|which|my|existing)\b/i.test(lower)) ||
+    (/\breminder\b/i.test(lower) &&
+      /\b(?:show|list|what|which|my|existing)\b/i.test(lower) &&
+      !/\b(?:change|update|delete|remove|cancel|reschedule)\b/i.test(lower)) ||
     (/\bsubscriptions?\b/i.test(lower) && /\b(?:today|tomorrow|tomorrows)\b/i.test(lower))
   )
 }
@@ -989,6 +1001,28 @@ function mergeDateEntities(base, patch) {
   }
 }
 
+function needsReminderSubjectPrompt(text = '', entities = {}) {
+  const fixed = applyTypoFixes(text)
+  if (!/\bremind\b/i.test(fixed)) {
+    return false
+  }
+  if (entities.serviceName && !/\bremind\s+me\s+(?:to|about)\b/i.test(fixed)) {
+    return false
+  }
+  if (/^(?:in|after)\s+\d+\s*(?:minutes?|mins?|hours?|hrs?|days?)\s+remind\s+me\b/i.test(fixed)) {
+    return false
+  }
+  const bare = fixed
+    .replace(/\bremind(?:ar)?\s+me\b/gi, ' ')
+    .replace(/\b(?:to|about)\b/gi, ' ')
+    .replace(/\b(?:tomorrow|today|tonight|next week|next month)\b/gi, ' ')
+    .replace(/\b(?:in|after)\s+\d+\s*(?:minutes?|mins?|hours?|hrs?|days?)\b/gi, ' ')
+    .replace(/\bat\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return bare.length > 0 && bare.length < 3
+}
+
 function needsExplicitTimePrompt(entities = {}, text = '') {
   if (extractOffset(text)) {
     return false
@@ -1018,6 +1052,7 @@ module.exports = {
   detectClauseIntents,
   mergeDateEntities,
   needsExplicitTimePrompt,
+  needsReminderSubjectPrompt,
   extractOffset,
   scoreSignals,
   pickBestIntent,

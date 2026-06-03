@@ -456,7 +456,18 @@ function stripReminderSchedulingWords(text) {
 }
 
 function extractReminderTitle(message, serviceName) {
-  if (serviceName && !/\bremind\s+me\s+(?:to|about)\b/i.test(message)) {
+  if (/^(?:in|after)\s+\d+\s*(?:minutes?|mins?|hours?|hrs?|days?)\s+remind\s+me\b/i.test(message)) {
+    return 'Reminder'
+  }
+  if (/\bremind\s+me\s+(?:in|after)\s+\d+\s*(?:minutes?|mins?|hours?|hrs?|days?)\b/i.test(message)) {
+    return 'Reminder'
+  }
+
+  if (
+    serviceName &&
+    !/^(?:in|after)$/i.test(serviceName) &&
+    !/\bremind\s+me\s+(?:to|about)\b/i.test(message)
+  ) {
     return serviceName
   }
 
@@ -465,6 +476,14 @@ function extractReminderTitle(message, serviceName) {
   )
   if (offsetLead?.[1]) {
     const title = stripReminderSchedulingWords(offsetLead[1])
+    if (title && title.length >= 3 && !/^(?:in|after)$/i.test(title)) {
+      return title
+    }
+  }
+
+  const everyDayLead = String(message || '').match(/^\s*every\s+day\s+(.+)/i)
+  if (everyDayLead?.[1]) {
+    const title = stripReminderSchedulingWords(everyDayLead[1])
     if (title) {
       return title
     }

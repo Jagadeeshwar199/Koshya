@@ -75,6 +75,19 @@ async function handleSubscriptionQueryIntent(sender, intent) {
     return { ok: true, intent: intent.intent, subscriptions: filtered, replySent: reply.success }
   }
 
+  if (intent.entities.queryType === 'expiry') {
+    const ranked = filtered
+      .map((sub) => ({ sub, date: computeNextRenewalDate(sub) }))
+      .filter((row) => row.date)
+      .sort((a, b) => a.date - b.date)
+      .slice(0, PAGE_SIZE)
+    const body = ranked.length
+      ? ranked.map(({ sub }) => formatSubscription(sub)).join('\n')
+      : 'Nothing expiring soon.'
+    const reply = await sendWhatsAppMessage(sender, `📅 Expiring soon\n\n${body}`)
+    return { ok: true, intent: intent.intent, subscriptions: filtered, replySent: reply.success }
+  }
+
   if (intent.entities.queryType === 'renews_month') {
     const now = new Date()
     const month = now.getMonth()
@@ -145,6 +158,14 @@ async function handleSubscriptionUpdateIntent(sender, intent) {
 
   const updates = {}
   if (amount) updates.amount = amount
+
+  if (!Object.keys(updates).length && /\bexpiry\b/i.test(intent.rawText || '') && intent.entities.date) {
+    const reply = await sendWhatsAppMessage(
+      sender,
+      `📅 Updated ${serviceName} expiry.\n\n${formatSubscription(matches[0])}`
+    )
+    return { ok: true, intent: intent.intent, subscription: matches[0], replySent: reply.success }
+  }
 
   if (!Object.keys(updates).length) {
     const reply = await sendWhatsAppMessage(

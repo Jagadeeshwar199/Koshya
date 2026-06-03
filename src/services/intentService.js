@@ -6,6 +6,7 @@ module.exports = {
   detectClauseIntents: intentDetector.detectClauseIntents,
   mergeDateEntities: intentDetector.mergeDateEntities,
   needsExplicitTimePrompt: intentDetector.needsExplicitTimePrompt,
+  needsReminderSubjectPrompt: intentDetector.needsReminderSubjectPrompt,
   extractOffset: intentDetector.extractOffset,
   MIN_CONFIDENCE: intentDetector.MIN_CONFIDENCE
 }

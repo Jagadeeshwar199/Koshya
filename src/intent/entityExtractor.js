@@ -364,6 +364,10 @@ function extractServiceName(text) {
     return null
   }
 
+  if (/^\s*(?:every\s+day|daily)\s+/i.test(text) && !/\bremind\s+me\s+(?:daily|every\s+day)\s+to\b/i.test(text)) {
+    return null
+  }
+
   if (/\bremind\s+me\s+to\b/i.test(text)) {
     const catalog = extractServiceCandidate(text)
     return catalog || null

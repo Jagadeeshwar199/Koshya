@@ -30,11 +30,16 @@ function extractServiceCandidate(text) {
     return null
   }
 
+  if (/^(?:in|after)\s+\d+\s*(?:minutes?|mins?|hours?|hrs?|days?)\s+remind\s+me\b/i.test(text.trim())) {
+    return null
+  }
+
   if (/\bremind\s+me\s+to\b/i.test(text) || /^remind\s+[a-z]/i.test(text.trim())) {
     return null
   }
 
   const patterns = [
+    /^([a-z0-9+][a-z0-9+.\s-]{0,24}?)\s+every\s+month\b/i,
     /\b(?:my|the)\s+([a-z0-9+][a-z0-9+.\s-]{1,30}?)\s+(?:ends?|expires?|expired|runs out|valid till|stops?)\b/i,
     /^([a-z0-9+][a-z0-9+.\s-]{1,30}?)\s+(?:ends?|expires?|expired|runs out)\b/i,
     /^([a-z0-9+][a-z0-9+.\s-]{1,30}?)\s+renews?\b/i,

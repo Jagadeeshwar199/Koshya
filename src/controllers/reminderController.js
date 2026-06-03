@@ -1,7 +1,8 @@
 const {
   detectIntent,
   mergeDateEntities,
-  needsExplicitTimePrompt
+  needsExplicitTimePrompt,
+  needsReminderSubjectPrompt
 } = require('../services/intentService')
 const {
   generateReminders,
@@ -62,6 +63,15 @@ async function sent(req, res, next) {
 }
 
 async function handleReminderCreateIntent(sender, text, intent) {
+  if (needsReminderSubjectPrompt(text, intent.entities)) {
+    const when = intent.entities.date?.value === 'tomorrow' ? ' tomorrow' : ''
+    const reply = await sendWhatsAppMessage(
+      sender,
+      `What should I remind you about${when}?`
+    )
+    return { ok: true, intent: intent.intent, reminder: null, replySent: reply.success }
+  }
+
   if (needsExplicitTimePrompt(intent.entities, text)) {
     await setState(sender, {
       action: 'awaiting_reminder_create_time',
