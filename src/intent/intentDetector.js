@@ -117,7 +117,9 @@ function scoreSignals(text, lower, entities, threshold) {
   }
   if (
     deleteSemantic > 0.4 &&
-    (subscriptionSemantic > 0.35 || /\bsubscription\b/.test(lower))
+    (subscriptionSemantic > 0.35 || /\bsubscription\b/.test(lower)) &&
+    /\b(?:delete|remove|cancel|stop\s+tracking)\b/.test(lower) &&
+    reminderSemantic < 0.55
   ) {
     scores[INTENTS.SUBSCRIPTION_DELETE] = clamp(0.75 + deleteSemantic * 0.2)
   }
@@ -167,7 +169,7 @@ function scoreSignals(text, lower, entities, threshold) {
         (entities.serviceName && subscriptionSemantic > 0.25))) ||
     (entities.serviceName &&
       entities.recurrence &&
-      (entities.amount || /\b\d{2,}\b/.test(text))) ||
+      (entities.amount || /\b\d{2,}\b/.test(text) || entities.date?.kind === 'month_day')) ||
     (/\btrack\b/i.test(lower) && /\brenewal\b/i.test(lower) && !/\bstop\s+tracking\b/i.test(lower))
 
   if (looksLikeSubscriptionSetup) {
@@ -431,6 +433,30 @@ function scoreSignals(text, lower, entities, threshold) {
     scores[INTENTS.REMINDER_CREATE] = 0.9
     scores[INTENTS.SUBSCRIPTION_DELETE] = 0.3
     scores[INTENTS.SUBSCRIPTION_UPDATE] = 0.3
+    scores[INTENTS.SUBSCRIPTION_CREATE] = 0.3
+  }
+
+  if (
+    /\b(?:meeting|appointment|statement|follow\s+up|passport)\b/i.test(lower) &&
+    hasFutureSchedule(entities)
+  ) {
+    scores[INTENTS.REMINDER_CREATE] = 0.91
+    scores[INTENTS.SUBSCRIPTION_QUERY] = 0.32
+    scores[INTENTS.SUBSCRIPTION_CREATE] = 0.32
+  }
+
+  if (/\b(?:pay\s+)?emi\b/i.test(lower) && hasFutureSchedule(entities)) {
+    scores[INTENTS.REMINDER_CREATE] = 0.92
+    scores[INTENTS.SUBSCRIPTION_CREATE] = 0.32
+  }
+
+  if (
+    /\bends?\b/i.test(lower) &&
+    /\b(?:tomorrow|today|tonight)\b/i.test(lower) &&
+    entities.serviceName
+  ) {
+    scores[INTENTS.SUBSCRIPTION_EXPIRY] = 0.95
+    scores[INTENTS.REMINDER_QUERY] = 0.32
   }
 
   if (
@@ -450,11 +476,272 @@ function scoreSignals(text, lower, entities, threshold) {
   if (
     /\brenewal\b/i.test(lower) &&
     /\b(?:today|tomorrow)\b/i.test(lower) &&
-    !/\b(?:update|change|amount|remind)\b/i.test(lower)
+    !/\b(?:update|change|amount|remind|need|passport|licen[cs]e)\b/i.test(lower) &&
+    !/\b(?:need|must)\b/i.test(lower)
   ) {
     scores[INTENTS.REMINDER_QUERY] = 0.94
     scores[INTENTS.REMINDER_CREATE] = 0.3
     scores[INTENTS.SUBSCRIPTION_UPDATE] = 0.3
+  }
+
+  const explicitDeleteVerb = /\b(?:delete|remove|cancel)\b/.test(lower)
+
+  if (reminderSemantic > 0.55 && !explicitDeleteVerb) {
+    scores[INTENTS.SUBSCRIPTION_DELETE] = Math.min(scores[INTENTS.SUBSCRIPTION_DELETE], 0.32)
+    scores[INTENTS.DELETE_ENTITY] = Math.min(scores[INTENTS.DELETE_ENTITY], 0.32)
+  }
+
+  if (/\b(?:alarm|wake\s+me|ping\s+me|notify\s+me)\b/i.test(lower)) {
+    scores[INTENTS.REMINDER_CREATE] = 0.94
+    scores[INTENTS.REMINDER_QUERY] = 0.3
+    scores[INTENTS.UNKNOWN] = 0.3
+  }
+
+  if (
+    /\b(?:ending|finishes|finishing|runs out|time is over|stop working|valid only till|package finishes)\b/i.test(
+      lower
+    ) &&
+    (entities.serviceName || subscriptionSemantic > 0.2)
+  ) {
+    scores[INTENTS.SUBSCRIPTION_EXPIRY] = 0.93
+    scores[INTENTS.REMINDER_CREATE] = Math.min(scores[INTENTS.REMINDER_CREATE], 0.38)
+  }
+
+  if (
+    /\bstops?\b/i.test(lower) &&
+    hasFutureSchedule(entities) &&
+    entities.serviceName &&
+    !/\bstop\s+tracking\b/i.test(lower)
+  ) {
+    scores[INTENTS.SUBSCRIPTION_EXPIRY] = 0.91
+    scores[INTENTS.SUBSCRIPTION_DELETE] = 0.3
+  }
+
+  if (
+    entities.serviceName &&
+    hasFutureSchedule(entities) &&
+    /^(?:my\s+)?[a-z][a-z0-9+.\s-]{1,28}\s+(?:tomorrow|today|tonight|next week|next month|friday|monday|tuesday|wednesday|thursday|saturday|sunday)$/i.test(
+      text.trim()
+    ) &&
+    !/\b(?:renew|remind|milk|mom|doctor|gym|emi|rent|pay|call|buy|need|must|submit|form)\b/i.test(
+      lower
+    ) &&
+    !/\b(?:ping|notify|alert|wake)\s+me\b/i.test(lower) &&
+    /\b(?:netflix|prime|spotify|chatgpt|cursor|canva|hotstar|jio|disney|youtube)\b/i.test(lower)
+  ) {
+    scores[INTENTS.SUBSCRIPTION_EXPIRY] = 0.94
+    scores[INTENTS.REMINDER_CREATE] = 0.35
+  }
+
+  if (
+    entities.serviceName &&
+    (entities.date?.kind === 'day' || /\b\d{1,2}(?:st|nd|rd|th)?\b/.test(lower)) &&
+    (/\brenews?\b/i.test(lower) || /\b(?:monthly|yearly|renewal)\b/i.test(lower)) &&
+    !/^(?:rent|emi|mom|milk|doctor|gym)\b/i.test(lower)
+  ) {
+    scores[INTENTS.SUBSCRIPTION_CREATE] = 0.93
+    scores[INTENTS.UNKNOWN] = 0.3
+  }
+
+  if (
+    /\b(?:need|must)\b/i.test(lower) &&
+    /\b(?:passport|licen[cs]e)\s+renewal\b/i.test(lower)
+  ) {
+    scores[INTENTS.REMINDER_CREATE] = 0.92
+    scores[INTENTS.SUBSCRIPTION_UPDATE] = 0.3
+  }
+
+  if (/\bfollow\s+up\b/i.test(lower) && hasFutureSchedule(entities)) {
+    scores[INTENTS.REMINDER_CREATE] = 0.91
+    scores[INTENTS.REMINDER_QUERY] = 0.32
+  }
+
+  if (
+    /\b(?:after|before)\s+(?:lunch|dinner|sleeping)\b/i.test(lower) &&
+    (actionSemantic > 0.25 || entities.actionText)
+  ) {
+    scores[INTENTS.REMINDER_CREATE] = 0.93
+    scores[INTENTS.SUBSCRIPTION_UPDATE] = 0.3
+    scores[INTENTS.SUBSCRIPTION_DELETE] = 0.3
+  }
+
+  if (
+    /\b(?:every\s+day|daily|every\s+weekday|every\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b/i.test(
+      lower
+    )
+  ) {
+    scores[INTENTS.REMINDER_CREATE] = 0.94
+    scores[INTENTS.SUBSCRIPTION_CREATE] = 0.32
+    scores[INTENTS.REMINDER_QUERY] = 0.3
+    scores[INTENTS.REMINDER_RESCHEDULE] = 0.32
+  }
+
+  if (
+    /\b(?:charges?\s+me|payment\s+gets\s+deducted|takes\s+money|bill\s+comes|need\s+.+\s+again)\b/i.test(
+      lower
+    ) &&
+    (entities.serviceName || subscriptionSemantic > 0.25)
+  ) {
+    scores[INTENTS.SUBSCRIPTION_CREATE] = 0.93
+    scores[INTENTS.REMINDER_QUERY] = 0.3
+  }
+
+  if (/\bmonthly\s+rent\s+payment\b/i.test(lower)) {
+    scores[INTENTS.REMINDER_CREATE] = 0.91
+    scores[INTENTS.SUBSCRIPTION_CREATE] = 0.35
+  }
+
+  if (/^(?:rent|emi|mom|milk|doctor|gym)\b/i.test(lower) && hasFutureSchedule(entities)) {
+    scores[INTENTS.REMINDER_CREATE] = 0.92
+    scores[INTENTS.SUBSCRIPTION_UPDATE] = 0.3
+  }
+
+  if (/\bevery\s+\d{1,2}(?:st|nd|rd|th)?\s+renew\b/i.test(lower)) {
+    scores[INTENTS.SUBSCRIPTION_CREATE] = 0.95
+    scores[INTENTS.UNKNOWN] = 0.3
+  }
+
+  if (
+    /\b(?:renews?|renewal)\s+next\s+month\b/i.test(lower) &&
+    entities.serviceName
+  ) {
+    scores[INTENTS.SUBSCRIPTION_CREATE] = 0.96
+    scores[INTENTS.SUBSCRIPTION_QUERY] = 0.3
+    scores[INTENTS.SUBSCRIPTION_EXPIRY] = 0.3
+    scores[INTENTS.REMINDER_RESCHEDULE] = 0.32
+  }
+
+  if (
+    entities.serviceName &&
+    entities.date?.kind === 'month_day' &&
+    !/\brenews?\b/i.test(lower) &&
+    !looksLikeSubscriptionSetup
+  ) {
+    scores[INTENTS.SUBSCRIPTION_EXPIRY] = Math.max(scores[INTENTS.SUBSCRIPTION_EXPIRY], 0.9)
+    scores[INTENTS.SUBSCRIPTION_UPDATE] = 0.32
+  }
+
+  if (/\bremind\b/i.test(lower) && (hasFutureSchedule(entities) || /\b\d{1,2}\s*$/i.test(lower))) {
+    scores[INTENTS.REMINDER_CREATE] = 0.94
+    scores[INTENTS.REMINDER_QUERY] = 0.32
+  }
+
+  if (reminderSemantic > 0.65 && (hasFutureSchedule(entities) || /\b\d{1,2}\s*(?:am|pm)\b/i.test(lower))) {
+    scores[INTENTS.REMINDER_CREATE] = Math.max(scores[INTENTS.REMINDER_CREATE], 0.93)
+    scores[INTENTS.SUBSCRIPTION_DELETE] = Math.min(scores[INTENTS.SUBSCRIPTION_DELETE], 0.35)
+  }
+
+  if (
+    /\bnext\s+(?:week|month)\b/i.test(lower) &&
+    entities.serviceName &&
+    !/\brenews?\b/i.test(lower) &&
+    !/\b(?:change|update|reschedule|move)\b/i.test(lower) &&
+    expirySemantic < 0.5
+  ) {
+    scores[INTENTS.SUBSCRIPTION_EXPIRY] = Math.max(scores[INTENTS.SUBSCRIPTION_EXPIRY], 0.88)
+    scores[INTENTS.REMINDER_RESCHEDULE] = Math.min(scores[INTENTS.REMINDER_RESCHEDULE], 0.35)
+  }
+
+  if (
+    /\b(?:passport|licen[cs]e)\s+renewal\b/i.test(lower) &&
+    hasFutureSchedule(entities)
+  ) {
+    scores[INTENTS.REMINDER_CREATE] = 0.94
+    scores[INTENTS.SUBSCRIPTION_QUERY] = 0.3
+  }
+
+  if (/\bnotif(?:y|iy)\b/i.test(lower) && hasFutureSchedule(entities)) {
+    scores[INTENTS.REMINDER_CREATE] = 0.94
+    scores[INTENTS.SUBSCRIPTION_QUERY] = 0.3
+  }
+
+  if (/\b(?:rent|payment)\b/i.test(lower) && reminderSemantic > 0.5) {
+    scores[INTENTS.REMINDER_CREATE] = 0.92
+    scores[INTENTS.SUBSCRIPTION_UPDATE] = 0.32
+  }
+
+  if (/\bafter\s+\d+\s*(?:hrs?|hours?)\b/i.test(lower) && actionSemantic > 0.3) {
+    scores[INTENTS.REMINDER_CREATE] = 0.93
+    scores[INTENTS.SUBSCRIPTION_CREATE] = 0.32
+  }
+
+  if (
+    /\b(?:meeting|appointment)\b/i.test(lower) &&
+    /\b\d{1,2}\s*(?:am|pm)\b/i.test(lower)
+  ) {
+    scores[INTENTS.REMINDER_CREATE] = 0.93
+    scores[INTENTS.SUBSCRIPTION_CREATE] = 0.32
+  }
+
+  if (
+    /\bevery\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i.test(lower) &&
+    !/\b(?:change|update|reschedule)\b/i.test(lower)
+  ) {
+    scores[INTENTS.REMINDER_CREATE] = 0.93
+    scores[INTENTS.REMINDER_RESCHEDULE] = 0.32
+  }
+
+  if (
+    /\bevery\s+(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}\b/i.test(
+      lower
+    ) &&
+    /\brenewal\b/i.test(lower)
+  ) {
+    scores[INTENTS.SUBSCRIPTION_CREATE] = 0.94
+    scores[INTENTS.SUBSCRIPTION_UPDATE] = 0.32
+  }
+
+  if (/\bruns?\s+out\b/i.test(lower) && entities.serviceName) {
+    scores[INTENTS.SUBSCRIPTION_EXPIRY] = 0.94
+    scores[INTENTS.REMINDER_QUERY] = 0.32
+  }
+
+  if (/\bmust\s+pay\b/i.test(lower) && hasFutureSchedule(entities)) {
+    scores[INTENTS.REMINDER_CREATE] = 0.93
+    scores[INTENTS.SUBSCRIPTION_CREATE] = 0.32
+  }
+
+  if (/^(?:rent|emi)\s+\d{1,2}/i.test(lower)) {
+    scores[INTENTS.REMINDER_CREATE] = 0.93
+    scores[INTENTS.SUBSCRIPTION_CREATE] = 0.32
+  }
+
+  if (
+    /\b(?:follow\s+up|check)\b/i.test(lower) &&
+    hasFutureSchedule(entities)
+  ) {
+    scores[INTENTS.REMINDER_CREATE] = 0.95
+    scores[INTENTS.SUBSCRIPTION_QUERY] = 0.3
+  }
+
+  if (
+    entities.serviceName &&
+    entities.date?.kind === 'day' &&
+    /\b\d{1,2}(?:st|nd|rd|th)\b/i.test(lower) &&
+    /\b(?:netflix|prime|spotify|chatgpt|cursor|canva|hotstar|jio)\b/i.test(lower) &&
+    !/\b(?:must|need|pay|bill|remind|ping|notify|call|buy|milk|mom|doctor|gym|emi|rent)\b/i.test(
+      lower
+    )
+  ) {
+    scores[INTENTS.SUBSCRIPTION_CREATE] = 0.94
+    scores[INTENTS.REMINDER_CREATE] = 0.35
+  }
+
+  if (
+    entities.serviceName &&
+    entities.recurrence &&
+    entities.date?.kind === 'month_day'
+  ) {
+    scores[INTENTS.SUBSCRIPTION_CREATE] = 0.96
+    scores[INTENTS.REMINDER_CREATE] = 0.35
+  }
+
+  if (
+    /\bcharges?\s+me\b/i.test(lower) &&
+    (entities.serviceName || subscriptionSemantic > 0.25)
+  ) {
+    scores[INTENTS.SUBSCRIPTION_CREATE] = 0.94
+    scores[INTENTS.REMINDER_CREATE] = 0.32
   }
 
   return scores

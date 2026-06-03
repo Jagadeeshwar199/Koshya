@@ -1,7 +1,7 @@
 const REMINDER_TERMS = [
   'remind', 'reminder', 'remindar', 'remnder', 'remember', 'dont forget',
-  'do not forget', 'ping', 'notify', 'alert', 'alarm', 'wake',
-  'note', 'followup', 'follow up', 'monitor'
+  'do not forget', 'ping', 'notify', 'alert', 'alarm', 'wake', 'wake me',
+  'note', 'followup', 'follow up', 'monitor', 'later'
 ]
 
 const SUBSCRIPTION_TERMS = [
@@ -11,7 +11,8 @@ const SUBSCRIPTION_TERMS = [
 
 const EXPIRY_TERMS = [
   'expire', 'expires', 'expired', 'expiry', 'end', 'ends', 'ending',
-  'finish', 'finishes', 'runs out', 'valid till', 'active till', 'stops', 'stop'
+  'finish', 'finishes', 'finishing', 'runs out', 'valid till', 'active till',
+  'stops', 'time is over', 'runs out', 'stop working', 'valid only till'
 ]
 
 const PAYMENT_TERMS = [

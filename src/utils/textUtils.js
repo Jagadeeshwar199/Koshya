@@ -12,7 +12,18 @@ function applyTypoFixes(text) {
     .replace(/\br3mind\b/gi, 'remind')
     .replace(/\b0n\b/gi, 'on')
     .replace(/\bnetfl!x\b/gi, 'netflix')
-    .replace(/\btomorw\b|\btmrw\b/gi, 'tomorrow')
+    .replace(/\btomorw\b|\btmrw\b|\btomoro\b/gi, 'tomorrow')
+    .replace(/\btommorow\b|\btommorrow\b/gi, 'tomorrow')
+    .replace(/\bexpries\b|\bexprie\b/gi, 'expires')
+    .replace(/\bnetflx\b/gi, 'netflix')
+    .replace(/\bspoitfy\b/gi, 'spotify')
+    .replace(/\brenewl\b/gi, 'renews')
+    .replace(/\bremeber\b|\bremeind\b/gi, 'remind')
+    .replace(/\balrm\b/gi, 'alarm')
+    .replace(/\bnotifiy\b/gi, 'notify')
+    .replace(/\bsubcription\b|\bsubscrption\b/gi, 'subscription')
+    .replace(/\bremnder\b/gi, 'remind')
+    .replace(/\bremindar\b/gi, 'remind')
 }
 
 function normalizeText(text) {

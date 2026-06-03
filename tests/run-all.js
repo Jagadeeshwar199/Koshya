@@ -6,6 +6,7 @@ const tests = [
   'test:parser',
   'test:intents',
   'test:intent-semantic',
+  'test:user-intent-examples',
   'test:intent-router',
   'test:reminders',
   'test:reminder-title',

@@ -4,7 +4,7 @@ const SEED_SERVICES = [
   'Netflix', 'Spotify', 'Prime', 'Amazon Prime', 'JioHotstar', 'Hotstar',
   'Disney', 'YouTube', 'YouTube Premium', 'ChatGPT', 'OpenAI', 'Google One',
   'iCloud', 'Apple Music', 'Zee5', 'SonyLIV', 'Airtel', 'Jio', 'Vi',
-  'Broadband', 'Electricity', 'Rent', 'Gym', 'Notion', 'Canva'
+  'Broadband', 'Electricity', 'Rent', 'Gym', 'Notion', 'Canva', 'Cursor', 'ChatGPT Plus'
 ]
 
 const dynamicServices = new Set(
@@ -42,7 +42,9 @@ function extractServiceCandidate(text) {
     /^add\s+([a-z0-9+][a-z0-9+.\s-]{1,30}?)(?:\s+subscription)?\b/i,
     /^(?:subscription|sub)\s+([a-z0-9+][a-z0-9+.\s-]{1,30}?)\s+(?:monthly|yearly|premium|membership)\b/i,
     /\btrack\s+([a-z0-9+][a-z0-9+.\s-]{1,30}?)\s+renewal\b/i,
-    /^([a-z0-9+][a-z0-9+.\s-]{1,30}?)\s+(?:monthly|yearly|premium|membership)\b/i
+    /^([a-z0-9+][a-z0-9+.\s-]{1,30}?)\s+(?:monthly|yearly|premium|membership)\b/i,
+    /^([a-z0-9+][a-z0-9+.\s-]{1,30}?)\s+(?:tomorrow|today|tonight|next week|next month)\b/i,
+    /^([a-z0-9+][a-z0-9+.\s-]{1,30}?)\s+(\d{1,2})(?:st|nd|rd|th)?\b/i
   ]
 
   for (const pattern of patterns) {
@@ -58,7 +60,7 @@ function extractServiceCandidate(text) {
       const phrase = words.slice(i, i + len).join(' ')
       if (
         phrase.length >= 3 &&
-        !/^(need|must|pay|buy|call|tomorrow|today|remind|renew|driving|licen[cs]e)$/i.test(phrase) &&
+        !/^(need|must|pay|buy|call|tomorrow|today|before|after|remind|renew|driving|licen[cs]e|mom|milk|doctor|gym|emi|rent)$/i.test(phrase) &&
         !/\bremind\s+me\b/i.test(phrase)
       ) {
         const catalogHit = matchCatalog(phrase)

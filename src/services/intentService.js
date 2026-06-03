@@ -5,5 +5,6 @@ module.exports = {
   detectIntent: intentDetector.detectIntent,
   mergeDateEntities: intentDetector.mergeDateEntities,
   needsExplicitTimePrompt: intentDetector.needsExplicitTimePrompt,
-  extractOffset: intentDetector.extractOffset
+  extractOffset: intentDetector.extractOffset,
+  MIN_CONFIDENCE: intentDetector.MIN_CONFIDENCE
 }

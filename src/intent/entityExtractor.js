@@ -56,6 +56,9 @@ function extractAmount(text) {
 
 function extractRecurrence(text) {
   const lower = text.toLowerCase()
+  if (/\brenews?\s+(?:on\s+)?\d{1,2}(?:st|nd|rd|th)?\b/i.test(lower)) {
+    return 'monthly'
+  }
   if (/\b(?:monthly|every\s+month|per\s+month)\b/.test(lower)) {
     return 'monthly'
   }
@@ -67,6 +70,18 @@ function extractRecurrence(text) {
   }
   if (/\b(?:daily|every\s+day)\b/.test(lower)) {
     return 'daily'
+  }
+  if (/\bevery\s+weekday\b/.test(lower)) {
+    return 'weekdays'
+  }
+  if (/\bevery\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/.test(lower)) {
+    return lower.match(/\bevery\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/)[1]
+  }
+  if (/\bevery\s+(\d{1,2})(?:st|nd|rd|th)?\b/.test(lower)) {
+    return lower.match(/\bevery\s+(\d{1,2})(?:st|nd|rd|th)?\b/)[0]
+  }
+  if (new RegExp(`\\bevery\\s+${MONTH_PATTERN}\\s+(\\d{1,2})\\b`, 'i').test(text)) {
+    return 'yearly'
   }
   return null
 }
@@ -87,6 +102,28 @@ function extractTime(text) {
     }
 
     return { hour, minute, source: 'explicit' }
+  }
+
+  const bareMeridiem = text.match(/\b(\d{1,2})\s*(am|pm)\b/i)
+  if (bareMeridiem) {
+    let hour = Number(bareMeridiem[1])
+    const meridiem = bareMeridiem[2].toLowerCase()
+    if (meridiem === 'pm' && hour < 12) {
+      hour += 12
+    }
+    if (meridiem === 'am' && hour === 12) {
+      hour = 0
+    }
+    return { hour, minute: 0, source: 'explicit' }
+  }
+
+  const trailingHour = text.match(/\b(\d{1,2})\s*$/i)
+  if (trailingHour && Number(trailingHour[1]) <= 23) {
+    return {
+      hour: Number(trailingHour[1]),
+      minute: 0,
+      source: 'explicit'
+    }
   }
 
   const hourOnlyMatch = text.match(/\bat\s+(\d{1,2})(?!\d|:)/i)
@@ -119,10 +156,25 @@ function extractPeriod(text) {
 }
 
 function extractOffset(text) {
+  if (/\bafter\s+an\s+hour\b/i.test(text)) {
+    return { kind: 'offset', minutes: 60 }
+  }
+
   const match = text.match(
     /\b(?:in|after)\s+(\d+)\s*(minutes?|mins?|hours?|hrs?|days?)\b/i
   )
   if (!match) {
+    const laterMatch = text.match(
+      /\b(\d+)\s*(minutes?|mins?|hours?|hrs?)\s+later\b/i
+    )
+    if (laterMatch) {
+      const amount = Number(laterMatch[1])
+      const unit = laterMatch[2].toLowerCase()
+      if (/hour|hr/.test(unit)) {
+        return { kind: 'offset', minutes: amount * 60 }
+      }
+      return { kind: 'offset', minutes: amount }
+    }
     return null
   }
 
@@ -266,6 +318,25 @@ function extractDate(text) {
     }
   }
 
+  const trailingDay = text.match(/\b(\d{1,2})(?:st|nd|rd|th)\s*$/i)
+  if (trailingDay) {
+    return {
+      kind: 'day',
+      day: Number(trailingDay[1]),
+      ...(time ? { time } : {})
+    }
+  }
+
+  if (/\bafter\s+lunch\b/i.test(lower)) {
+    return { kind: 'relative', value: 'today', period: 'afternoon', ...(time ? { time } : {}) }
+  }
+  if (/\bafter\s+dinner\b/i.test(lower)) {
+    return { kind: 'relative', value: 'today', period: 'evening', ...(time ? { time } : {}) }
+  }
+  if (/\bbefore\s+sleeping\b/i.test(lower)) {
+    return { kind: 'relative', value: 'today', period: 'evening', ...(time ? { time } : {}) }
+  }
+
   if (time) {
     return {
       kind: 'time_only',
@@ -286,6 +357,10 @@ function extractServiceName(text) {
     return catalog || null
   }
 
+  if (/\b(?:ping|notify|alert|wake)\s+me\b/i.test(text)) {
+    return null
+  }
+
   const patterns = [
     /\b(?:about|for)\s+([a-z0-9+.\s-]+?)\s+(?:subscription|reminder|renewal)\b/i,
     /\b(?:change|update|edit|modify)\s+([a-z0-9+.\s-]+?)\s+(?:amount|renewal|date|subscription)\b/i,
@@ -300,6 +375,8 @@ function extractServiceName(text) {
     /^(?:subscription|sub)\s+([a-z0-9+.\s-]+?)\s+(?:monthly|yearly|every\s+\d+\s+months?)\b/i,
     /^([a-z0-9+.\s-]+?)\s+(?:monthly|yearly|every\s+\d+\s+months?)\b/i,
     /\btrack\s+([a-z0-9+.\s-]+?)\s+renewal\b/i,
+    /\bevery\s+\d{1,2}(?:st|nd|rd|th)?\s+renew\s+([a-z0-9+.\s-]+)\b/i,
+    /\brenew\s+([a-z0-9+.\s-]+)\s*$/i,
     /^([a-z0-9+.\s-]+?)\s+renewal\b/i
   ]
 
@@ -332,7 +409,7 @@ function extractServiceName(text) {
 
 const BLOCKED_SERVICE_NAMES = new Set([
   'need', 'must', 'should', 'call', 'pay', 'buy', 'doctor', 'appointment', 'me', 'my',
-  'remind me to', 'remind me', 'driving licence', 'driving license'
+  'remind me to', 'remind me', 'driving licence', 'driving license', 'before', 'after'
 ])
 
 function extractActionText(text) {
@@ -340,6 +417,7 @@ function extractActionText(text) {
     /\b(?:need to|must|should|have to)\s+(.+?)(?:\s+(?:tomorrow|today|tonight|on|at|in|after|next|friday|monday|tuesday|wednesday|thursday|saturday|sunday)\b|$)/i,
     /\b(?:remind\s+me\s+(?:to|about))\s+(.+?)(?:\s+(?:tomorrow|today|at|on|in|after)\b|$)/i,
     /\b([a-z].+?)\s+(?:tomorrow|today|tonight)\b/i,
+    /^(?:mom|milk|doctor|gym|emi|rent)\s+(?:tomorrow|today|tonight|friday|monday|tuesday|wednesday|thursday|saturday|sunday|\d{1,2}(?:st|nd|rd|th)?)\b/i,
     /\b((?:doctor|dentist)\s+)?appointment\s+([a-z]+day)\b/i,
     /\b(?:appointment|meeting)\s+(?:for\s+)?(.+?)(?:\s+on\b|$)/i
   ]
