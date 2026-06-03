@@ -11,6 +11,7 @@ const tests = [
   'test:reminder-schedule',
   'test:subscription-display',
   'test:subscription-pending',
+  'test:subscription-amount',
   'test:reminder-confirmation',
   'test:reminder-query',
   'test:reminder-update',

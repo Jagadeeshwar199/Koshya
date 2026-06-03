@@ -344,9 +344,54 @@ function extractRecurrence(text) {
   return null
 }
 
+function numberUsedAsRenewalDate(text, n) {
+  const d = String(n)
+  if (new RegExp(`\\b${d}\\s*(?:st|nd|rd|th)\\b`, 'i').test(text)) {
+    return true
+  }
+  if (new RegExp(`\\b${d}\\s+(?:st|nd|rd|th)\\b`, 'i').test(text)) {
+    return true
+  }
+  if (new RegExp(`\\b(?:on|the)\\s+${d}(?:st|nd|rd|th)?\\b`, 'i').test(text)) {
+    return true
+  }
+  if (
+    new RegExp(`\\b${d}\\s*(?:st|nd|rd|th)?\\s*(${MONTH_PATTERN})\\b`, 'i').test(
+      text
+    )
+  ) {
+    return true
+  }
+  if (new RegExp(`\\b(${MONTH_PATTERN})\\s+${d}\\b`, 'i').test(text)) {
+    return true
+  }
+  if (new RegExp(`\\b${d}(?:st|nd|rd|th)?\\s+every\\s+month`, 'i').test(text)) {
+    return true
+  }
+  return false
+}
+
 function extractAmount(text, renewalDay) {
-  const matches = [...text.matchAll(/(?:₹|rs\.?|inr\s*)?(\d+)/gi)].map(
-    (m) => Number(m[1])
+  const currency = text.match(/(?:₹|rs\.?|inr\s*)(\d+)/i)
+  if (currency) {
+    return Number(currency[1])
+  }
+
+  const dashAmount = text.match(/-\s*(\d{2,})\b/)
+  if (dashAmount) {
+    return Number(dashAmount[1])
+  }
+
+  const monthlyAmount = text.match(/\b(\d{2,})\s+monthly\b/i)
+  if (
+    monthlyAmount &&
+    !numberUsedAsRenewalDate(text, Number(monthlyAmount[1]))
+  ) {
+    return Number(monthlyAmount[1])
+  }
+
+  const matches = [...text.matchAll(/(?:₹|rs\.?|inr\s*)?(\d+)/gi)].map((m) =>
+    Number(m[1])
   )
 
   if (!matches.length) {
@@ -357,6 +402,9 @@ function extractAmount(text, renewalDay) {
     if (renewalDay !== null && n === renewalDay) {
       return false
     }
+    if (numberUsedAsRenewalDate(text, n)) {
+      return false
+    }
     return n >= 10
   })
 
@@ -365,6 +413,17 @@ function extractAmount(text, renewalDay) {
   }
 
   return filtered[filtered.length - 1]
+}
+
+function stripDateAsAmount(draft) {
+  if (
+    draft.amount != null &&
+    draft.renewalDay != null &&
+    draft.amount === draft.renewalDay
+  ) {
+    return { ...draft, amount: null }
+  }
+  return draft
 }
 
 function extractRenewal(text) {
@@ -591,6 +650,7 @@ function finalizePatternMatch(parsed) {
 }
 
 function finalizeDraft(draft) {
+  draft = stripDateAsAmount(draft)
   const missing = getMissing(draft)
 
   if (!missing.length) {

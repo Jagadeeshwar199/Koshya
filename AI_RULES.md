@@ -33,7 +33,7 @@
 
 ## Pitfalls (recurring)
 - `detectIntent` can be `UNKNOWN` while `parseMessage` has partial fields; router must honor `conversation_state` / `pending_drafts` first.
-- Day numbers vs ₹ amount: renewal day can be parsed as amount without `extractRenewal` + amount filter.
+- Day numbers vs ₹ amount: never use date/day digits as amount; use currency, `- 149`, or `N monthly` patterns only.
 - Subscription follow-ups fail if `getPending` routing is skipped before `handleUnknownIntent`.
 
 ## UX
