@@ -8,6 +8,7 @@ const tests = [
   'test:intent-router',
   'test:reminders',
   'test:reminder-title',
+  'test:reminder-schedule',
   'test:reminder-confirmation',
   'test:reminder-query',
   'test:reminder-update',

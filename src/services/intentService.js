@@ -346,7 +346,7 @@ function detectIntent(message) {
     return buildResult(INTENTS.HELP, 0.99, text)
   }
 
-  if (/^(more|show more|next)$/i.test(text)) {
+  if (/^(more|show more|next)$/i.test(text) || /^next$/i.test(text)) {
     return buildResult(INTENTS.LIST_MORE, 0.99, text)
   }
 
@@ -470,7 +470,10 @@ function mergeDateEntities(base, patch) {
   }
 }
 
-function needsExplicitTimePrompt(entities = {}) {
+function needsExplicitTimePrompt(entities = {}, text = '') {
+  if (extractOffset(text)) {
+    return false
+  }
   const date = entities.date
   if (!date) {
     return true
@@ -494,5 +497,6 @@ module.exports = {
   INTENTS,
   detectIntent,
   mergeDateEntities,
-  needsExplicitTimePrompt
+  needsExplicitTimePrompt,
+  extractOffset
 }

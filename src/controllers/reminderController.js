@@ -62,7 +62,7 @@ async function sent(req, res, next) {
 }
 
 async function handleReminderCreateIntent(sender, text, intent) {
-  if (needsExplicitTimePrompt(intent.entities)) {
+  if (needsExplicitTimePrompt(intent.entities, text)) {
     await setState(sender, {
       action: 'awaiting_reminder_create_time',
       draftMessage: text,
@@ -183,7 +183,7 @@ async function handleReminderCreateTimeFollowUp(sender, draftMessage, timeText, 
     )
   }
 
-  if (needsExplicitTimePrompt({ date: entities.date })) {
+  if (needsExplicitTimePrompt({ date: entities.date }, timeText)) {
     await setState(sender, {
       action: 'awaiting_reminder_create_time',
       draftMessage,

@@ -51,15 +51,20 @@ async function routeWhatsAppMessage(sender, text, options = {}) {
 
   if (pendingState?.action === 'awaiting_reminder_create_time' && pendingState.draftMessage) {
     const intent = detectIntent(text)
-    if (intent.entities.date || pendingState.draftEntities) {
+    const isFreshReminder =
+      /\bremind\s+me\b/i.test(text) && intent.entities.date?.kind === 'offset'
+    if (isFreshReminder) {
+      await clearState(sender)
+    } else if (intent.entities.date || pendingState.draftEntities) {
       return handleReminderCreateTimeFollowUp(
         sender,
         pendingState.draftMessage,
         text,
         pendingState.draftEntities
       )
+    } else {
+      await clearState(sender)
     }
-    await clearState(sender)
   }
 
   const intent = detectIntent(text)

@@ -67,9 +67,9 @@ assert.equal(
 Exercise
 Tomorrow, 9 AM
 
-You can:
-• Change to 7 PM
-• Show reminders`
+Reply:
+change to 7 PM
+show reminders`
 )
 
 console.log('Reminder update tests passed: 7')

@@ -63,7 +63,9 @@ async function processQueuedReminders() {
 
         logger.info('reminder.delivery_started', {
           reminderId: claimed.id,
-          userPhone: claimed.user_phone
+          userPhone: claimed.user_phone,
+          scheduledUtc: claimed.trigger_at,
+          deliveredUtc: new Date().toISOString()
         })
 
         const sendResult = await sendWhatsAppMessage(

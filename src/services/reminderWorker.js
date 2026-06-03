@@ -3,7 +3,7 @@ const { runReminderJob } = require('./reminderJobService')
 const logger = require('../../utils/logger')
 
 const CRON_SCHEDULE =
-  process.env.REMINDER_CRON_SCHEDULE || '0 9,21 * * *'
+  process.env.REMINDER_CRON_SCHEDULE || '* * * * *'
 
 const TIMEZONE =
   process.env.REMINDER_TIMEZONE || 'Asia/Kolkata'

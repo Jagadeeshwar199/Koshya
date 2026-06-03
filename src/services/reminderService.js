@@ -4,6 +4,7 @@ const {
   validateId
 } = require('./subscriptionService')
 const { ApiError } = require('../utils/apiError')
+const logger = require('../../utils/logger')
 
 const MONTH_INDEX = {
   jan: 0,
@@ -58,6 +59,15 @@ function addMonthsToParts(parts, months) {
     month,
     day
   }
+}
+
+function getIstDateKey(date) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(date)
 }
 
 function getIstPartsFromDate(date) {
@@ -320,7 +330,14 @@ function resolveTriggerAt(dateEntity, now = new Date()) {
   }
 
   if (dateEntity.kind === 'time_only') {
-    return dateFromIstParts(targetParts)
+    const candidate = dateFromIstParts(targetParts)
+    if (candidate > now) {
+      return candidate
+    }
+    if (getIstDateKey(now) !== getIstDateKey(new Date())) {
+      return candidate
+    }
+    return dateFromIstParts({ ...targetParts, day: targetParts.day + 1 })
   }
 
   if (dateEntity.kind === 'relative' && dateEntity.value === 'next_week') {
@@ -461,6 +478,13 @@ async function createReminderFromIntent({ userPhone, message, entities = {} }) {
 
   const subject = extractReminderTitle(message, entities.serviceName)
   const triggerAt = resolveTriggerAt(entities.date)
+
+  logger.info('reminder.schedule', {
+    userPhone,
+    parsedDate: entities.date,
+    storedUtc: triggerAt.toISOString(),
+    storedIst: triggerAt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+  })
 
   const { data, error } = await supabase
     .from('reminders')
