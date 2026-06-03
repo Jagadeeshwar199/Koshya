@@ -22,6 +22,10 @@ npm run test:subscription-pending
 - `npm test` → all suites pass.
 - Add suite to `tests/run-all.js` and `package.json` scripts if new file.
 
+## Known gaps (add tests when touching area)
+- Subscription upsert on 409 — service layer, no dedicated test.
+- Reminder list `dedupeReminders` — no dedicated test.
+
 ## Do not
 - Skip tests for “small” fixes.
 - Break existing assertions without explicit product change + doc update.

@@ -19,3 +19,5 @@
 | 2026-06 | `renewls` / date as amount | Missing typo + amount filter | `applyTypoFixes`, exclude renewal day from amount | `subscription-display.test.js` |
 | 2026-06 | Duplicate subscription 409 | Insert-only | Upsert in subscription service | — |
 | 2026-06 | Webhook rejected valid Gupshup payload | Strict signature only | Parse alternate payload shapes; allow inbound when message present | `webhook-auth.test.js` |
+| 2026-06 | Reminder list duplicates | No dedupe on list output | `dedupeReminders` in `reminderService` | — |
+| 2026-06 | Wrong delete target (reminder vs subscription) | Ambiguous “delete …” phrasing | `intentService` disambiguation | `day13.test.js` |

@@ -31,7 +31,13 @@
 - Default: **Asia/Kolkata (IST)** (`REMINDER_TIMEZONE`, `reminderService` IST offset).
 - Display/store reminder triggers in IST; worker uses configured timezone.
 
+## Pitfalls (recurring)
+- `detectIntent` can be `UNKNOWN` while `parseMessage` has partial fields; router must honor `conversation_state` / `pending_drafts` first.
+- Day numbers vs ₹ amount: renewal day can be parsed as amount without `extractRenewal` + amount filter.
+- Subscription follow-ups fail if `getPending` routing is skipped before `handleUnknownIntent`.
+
 ## UX
+- Greetings: `hi`, `hello`, `start`, `help` → welcome (`HELP` intent).
 - Ask only for **missing** fields; give one short example.
 - Lists: paginate; `LIST_MORE` for next page.
 - Typos tolerated in parser (`renewls`, `tomorw`, etc.) via `textUtils` / `parserCore`.

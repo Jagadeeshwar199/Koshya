@@ -14,6 +14,12 @@
 | Format | `subscriptionFormatter`, `reminderFormatter`, `uxMessages` |
 | API | `subscriptionRoutes`, `reminderRoutes`, `parseRoutes` |
 
+## Router order (`messageRouterService`)
+1. `conversation_state` (delete confirm, reminder time follow-ups)
+2. `detectIntent` → intent handlers
+3. `pending_drafts` → subscription flow (even if `UNKNOWN`)
+4. `handleUnknownIntent`
+
 ## Request flow
 ```
 Gupshup webhook → webhookAuth → webhookController
