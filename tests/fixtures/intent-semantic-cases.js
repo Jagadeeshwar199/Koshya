@@ -14,11 +14,11 @@ const legacy = [
 ]
 
 const expiry = [
-  ['Netflix ends tomorrow', INTENTS.SUBSCRIPTION_QUERY],
-  ['Prime expires next week', INTENTS.SUBSCRIPTION_QUERY],
-  ['Spotify runs out tonight', INTENTS.SUBSCRIPTION_QUERY],
-  ['ChatGPT valid till June 20', INTENTS.SUBSCRIPTION_QUERY],
-  ['My Netflix ends at 7 PM tomorrow', INTENTS.SUBSCRIPTION_QUERY]
+  ['Netflix ends tomorrow', INTENTS.SUBSCRIPTION_EXPIRY],
+  ['Prime expires next week', INTENTS.SUBSCRIPTION_EXPIRY],
+  ['Spotify runs out tonight', INTENTS.SUBSCRIPTION_EXPIRY],
+  ['ChatGPT valid till June 20', INTENTS.SUBSCRIPTION_EXPIRY],
+  ['My Netflix ends at 7 PM tomorrow', INTENTS.SUBSCRIPTION_EXPIRY]
 ]
 
 const implicitReminders = [
@@ -73,7 +73,7 @@ function expandVariants() {
 
   for (const service of services) {
     for (const time of times) {
-      generated.push([`${service} ${expiryVerbs[0]} ${time}`, INTENTS.SUBSCRIPTION_QUERY])
+      generated.push([`${service} ${expiryVerbs[0]} ${time}`, INTENTS.SUBSCRIPTION_EXPIRY])
       generated.push([`must pay ${service} bill ${time}`, INTENTS.REMINDER_CREATE])
     }
   }

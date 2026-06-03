@@ -30,7 +30,7 @@ function extractServiceCandidate(text) {
     return null
   }
 
-  if (/\bremind\s+me\s+to\b/i.test(text)) {
+  if (/\bremind\s+me\s+to\b/i.test(text) || /^remind\s+[a-z]/i.test(text.trim())) {
     return null
   }
 
@@ -60,7 +60,7 @@ function extractServiceCandidate(text) {
       const phrase = words.slice(i, i + len).join(' ')
       if (
         phrase.length >= 3 &&
-        !/^(need|must|pay|buy|call|tomorrow|today|before|after|remind|renew|driving|licen[cs]e|mom|milk|doctor|gym|emi|rent)$/i.test(phrase) &&
+        !/^(need|must|pay|buy|call|tomorrow|today|before|after|remind|renew|driving|licen[cs]e|mom|milk|doctor|gym|emi|rent|hour|minute|an)$/i.test(phrase) &&
         !/\bremind\s+me\b/i.test(phrase)
       ) {
         const catalogHit = matchCatalog(phrase)

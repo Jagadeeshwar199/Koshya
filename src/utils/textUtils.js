@@ -13,6 +13,14 @@ function applyTypoFixes(text) {
     .replace(/\b0n\b/gi, 'on')
     .replace(/\bnetfl!x\b/gi, 'netflix')
     .replace(/\btomorw\b|\btmrw\b|\btomoro\b/gi, 'tomorrow')
+    .replace(/\bnxt\s+wk\b/gi, 'next week')
+    .replace(/\bnxt\s+mnth\b/gi, 'next month')
+    .replace(/\bexprs\b/gi, 'expires')
+    .replace(/\brnwl\b/gi, 'renews')
+    .replace(/\bsprtfy\b/gi, 'spotify')
+    .replace(/\bntflx\b/gi, 'netflix')
+    .replace(/\brmndr\b/gi, 'remind')
+    .replace(/\bsh0w\b/gi, 'show')
     .replace(/\btommorow\b|\btommorrow\b/gi, 'tomorrow')
     .replace(/\bexpries\b|\bexprie\b/gi, 'expires')
     .replace(/\bnetflx\b/gi, 'netflix')
@@ -23,6 +31,7 @@ function applyTypoFixes(text) {
     .replace(/\bnotifiy\b/gi, 'notify')
     .replace(/\bsubcription\b|\bsubscrption\b/gi, 'subscription')
     .replace(/\bremnder\b/gi, 'remind')
+    .replace(/\bremaind\b/gi, 'remind')
     .replace(/\bremindar\b/gi, 'remind')
 }
 

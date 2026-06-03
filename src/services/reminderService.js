@@ -435,7 +435,9 @@ function stripReminderSchedulingWords(text) {
     .replace(/\b(?:remind me|create a reminder|set a reminder|add a reminder)\b/gi, ' ')
     .replace(/\b(?:daily|every\s+day)\b/gi, ' ')
     .replace(/\b(?:tomorrow|today|tonight|next week|next month)\b/gi, ' ')
-    .replace(/\b(?:about|for|to|on|in|the|a|an)\b/gi, ' ')
+    .replace(/\bin\s+the\s+(?:morning|afternoon|evening|night)\b/gi, ' ')
+    .replace(/\b(?:about|for|on|in)\b/gi, ' ')
+    .replace(/(?<!to\s)\b(?:the|a|an)\b/gi, ' ')
     .replace(/\bby\s*$/i, ' ')
     .replace(/\bat\s*$/i, ' ')
     .replace(/\b(?:morning|afternoon|evening|night)\b/gi, ' ')
@@ -448,12 +450,13 @@ function stripReminderSchedulingWords(text) {
     .replace(/\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/gi, ' ')
     .replace(/\b(?:am|pm)\b/gi, ' ')
     .replace(/\bat\s*$/i, ' ')
+    .replace(/^\s*to\s+/i, ' ')
     .replace(/\s+/g, ' ')
     .trim()
 }
 
 function extractReminderTitle(message, serviceName) {
-  if (serviceName && !/\bremind\s+me\s+to\b/i.test(message)) {
+  if (serviceName && !/\bremind\s+me\s+(?:to|about)\b/i.test(message)) {
     return serviceName
   }
 

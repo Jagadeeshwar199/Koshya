@@ -7,7 +7,8 @@ function entityType(intent) {
     intent === INTENTS.SUBSCRIPTION_CREATE ||
     intent === INTENTS.SUBSCRIPTION_UPDATE ||
     intent === INTENTS.SUBSCRIPTION_DELETE ||
-    intent === INTENTS.SUBSCRIPTION_QUERY
+    intent === INTENTS.SUBSCRIPTION_QUERY ||
+    intent === INTENTS.SUBSCRIPTION_EXPIRY
   ) {
     return 'subscription'
   }
@@ -24,6 +25,9 @@ function entityType(intent) {
 }
 
 function assertExpect(message, result, expect) {
+  if (expect.clarify) {
+    assert.equal(result.entities.clarify, expect.clarify, `${message}: clarify`)
+  }
   if (expect.queryType) {
     assert.equal(result.entities.queryType, expect.queryType, `${message}: queryType`)
   }
@@ -65,7 +69,9 @@ for (const { message, intent: expected, expect } of all) {
     expected,
     `${message} => ${result.intent} (${result.confidence}), expected ${expected}`
   )
-  assert.ok(result.confidence >= MIN_CONFIDENCE, `${message}: confidence ${result.confidence}`)
+  if (expected !== INTENTS.UNKNOWN) {
+    assert.ok(result.confidence >= MIN_CONFIDENCE, `${message}: confidence ${result.confidence}`)
+  }
   assert.ok(result.rawText, `${message}: rawText`)
   if (expect) {
     assertExpect(message, result, expect)

@@ -24,7 +24,7 @@ for (const [message, expected] of allCases) {
 }
 
 const expiry = detectIntent('Netflix ends tomorrow')
-assert.equal(expiry.intent, INTENTS.SUBSCRIPTION_QUERY)
+assert.equal(expiry.intent, INTENTS.SUBSCRIPTION_EXPIRY)
 assert.equal(expiry.entities.queryType, 'expiry')
 assert.equal(expiry.entities.serviceName, 'Netflix')
 

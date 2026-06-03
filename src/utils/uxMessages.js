@@ -40,6 +40,11 @@ function clarifyLowConfidence(intent) {
   return map[intent] || null
 }
 
+function ambiguousShortReply(serviceName) {
+  const name = serviceName || 'that'
+  return `What should I do with ${name} tomorrow?\n\nExamples:\n• ${name} expires tomorrow\n• Remind me about ${name} tomorrow at 8 PM`
+}
+
 function unknownReply(text) {
   const lower = String(text || '').toLowerCase()
   if (/\b(remind|forget|later)\b/.test(lower)) {
@@ -60,5 +65,6 @@ module.exports = {
   SUB_SAVED_NEXT,
   REM_SAVED_NEXT,
   clarifyLowConfidence,
+  ambiguousShortReply,
   unknownReply
 }

@@ -46,30 +46,30 @@ const subscriptionCreate = [
 ]
 
 const subscriptionExpiry = [
-  c('Netflix expires tomorrow', INTENTS.SUBSCRIPTION_QUERY, { queryType: 'expiry', serviceName: 'Netflix', hasDate: true, entityType: 'subscription' }),
-  c('Netflix ends tomorrow', INTENTS.SUBSCRIPTION_QUERY, { queryType: 'expiry', serviceName: 'Netflix', hasDate: true }),
-  c('Netflix ending tomorrow', INTENTS.SUBSCRIPTION_QUERY, { queryType: 'expiry', serviceName: 'Netflix', hasDate: true }),
-  c('Netflix finishes tomorrow', INTENTS.SUBSCRIPTION_QUERY, { queryType: 'expiry', serviceName: 'Netflix', hasDate: true }),
-  c('Netflix runs out tomorrow', INTENTS.SUBSCRIPTION_QUERY, { queryType: 'expiry', serviceName: 'Netflix', hasDate: true }),
-  c('Netflix valid till Friday', INTENTS.SUBSCRIPTION_QUERY, { queryType: 'expiry', serviceName: 'Netflix', hasDate: true }),
-  c('Netflix active till Friday', INTENTS.SUBSCRIPTION_QUERY, { queryType: 'expiry', serviceName: 'Netflix', hasDate: true }),
-  c('My Netflix stops tomorrow', INTENTS.SUBSCRIPTION_QUERY, { queryType: 'expiry', serviceName: 'Netflix', hasDate: true }),
-  c('My Netflix ends at 7 PM tomorrow', INTENTS.SUBSCRIPTION_QUERY, { queryType: 'expiry', serviceName: 'Netflix', hasDate: true }),
-  c('Prime expires next week', INTENTS.SUBSCRIPTION_QUERY, { queryType: 'expiry', serviceName: 'Prime', hasDate: true }),
-  c('Spotify expires tonight', INTENTS.SUBSCRIPTION_QUERY, { queryType: 'expiry', serviceName: 'Spotify', hasDate: true }),
-  c('ChatGPT ends on June 30', INTENTS.SUBSCRIPTION_QUERY, { queryType: 'expiry', serviceName: 'ChatGPT', hasDate: true }),
-  c('Cursor plan ends tomorrow', INTENTS.SUBSCRIPTION_QUERY, { queryType: 'expiry', hasDate: true }),
-  c('Canva premium expires Sunday', INTENTS.SUBSCRIPTION_QUERY, { queryType: 'expiry', serviceName: 'Canva', hasDate: true }),
-  c('Hotstar ends next month', INTENTS.SUBSCRIPTION_QUERY, { queryType: 'expiry', serviceName: 'Hotstar', hasDate: true }),
-  c('JioHotstar valid till 20th', INTENTS.SUBSCRIPTION_QUERY, { queryType: 'expiry', serviceName: 'JioHotstar', hasDate: true })
+  c('Netflix expires tomorrow', INTENTS.SUBSCRIPTION_EXPIRY, { queryType: 'expiry', serviceName: 'Netflix', hasDate: true, entityType: 'subscription' }),
+  c('Netflix ends tomorrow', INTENTS.SUBSCRIPTION_EXPIRY, { queryType: 'expiry', serviceName: 'Netflix', hasDate: true }),
+  c('Netflix ending tomorrow', INTENTS.SUBSCRIPTION_EXPIRY, { queryType: 'expiry', serviceName: 'Netflix', hasDate: true }),
+  c('Netflix finishes tomorrow', INTENTS.SUBSCRIPTION_EXPIRY, { queryType: 'expiry', serviceName: 'Netflix', hasDate: true }),
+  c('Netflix runs out tomorrow', INTENTS.SUBSCRIPTION_EXPIRY, { queryType: 'expiry', serviceName: 'Netflix', hasDate: true }),
+  c('Netflix valid till Friday', INTENTS.SUBSCRIPTION_EXPIRY, { queryType: 'expiry', serviceName: 'Netflix', hasDate: true }),
+  c('Netflix active till Friday', INTENTS.SUBSCRIPTION_EXPIRY, { queryType: 'expiry', serviceName: 'Netflix', hasDate: true }),
+  c('My Netflix stops tomorrow', INTENTS.SUBSCRIPTION_EXPIRY, { queryType: 'expiry', serviceName: 'Netflix', hasDate: true }),
+  c('My Netflix ends at 7 PM tomorrow', INTENTS.SUBSCRIPTION_EXPIRY, { queryType: 'expiry', serviceName: 'Netflix', hasDate: true }),
+  c('Prime expires next week', INTENTS.SUBSCRIPTION_EXPIRY, { queryType: 'expiry', serviceName: 'Prime', hasDate: true }),
+  c('Spotify expires tonight', INTENTS.SUBSCRIPTION_EXPIRY, { queryType: 'expiry', serviceName: 'Spotify', hasDate: true }),
+  c('ChatGPT ends on June 30', INTENTS.SUBSCRIPTION_EXPIRY, { queryType: 'expiry', serviceName: 'ChatGPT', hasDate: true }),
+  c('Cursor plan ends tomorrow', INTENTS.SUBSCRIPTION_EXPIRY, { queryType: 'expiry', hasDate: true }),
+  c('Canva premium expires Sunday', INTENTS.SUBSCRIPTION_EXPIRY, { queryType: 'expiry', serviceName: 'Canva', hasDate: true }),
+  c('Hotstar ends next month', INTENTS.SUBSCRIPTION_EXPIRY, { queryType: 'expiry', serviceName: 'Hotstar', hasDate: true }),
+  c('JioHotstar valid till 20th', INTENTS.SUBSCRIPTION_EXPIRY, { queryType: 'expiry', serviceName: 'JioHotstar', hasDate: true })
 ]
 
 const spelling = [
-  c('netflx expire tomoro', INTENTS.SUBSCRIPTION_QUERY, { queryType: 'expiry', serviceName: 'Netflix', hasDate: true }),
-  c('netflix expries tommorow', INTENTS.SUBSCRIPTION_QUERY, { queryType: 'expiry', serviceName: 'Netflix', hasDate: true }),
+  c('netflx expire tomoro', INTENTS.SUBSCRIPTION_EXPIRY, { queryType: 'expiry', serviceName: 'Netflix', hasDate: true }),
+  c('netflix expries tommorow', INTENTS.SUBSCRIPTION_EXPIRY, { queryType: 'expiry', serviceName: 'Netflix', hasDate: true }),
   c('spoitfy renewl next month', INTENTS.SUBSCRIPTION_CREATE, { serviceName: 'Spotify', entityType: 'subscription' }),
-  c('subscrption ends friday', INTENTS.SUBSCRIPTION_QUERY, { queryType: 'expiry', hasDate: true }),
-  c('suscription expire next week', INTENTS.SUBSCRIPTION_QUERY, { queryType: 'expiry', hasDate: true }),
+  c('subscrption ends friday', INTENTS.SUBSCRIPTION_EXPIRY, { queryType: 'expiry', hasDate: true }),
+  c('suscription expire next week', INTENTS.SUBSCRIPTION_EXPIRY, { queryType: 'expiry', hasDate: true }),
   c('remeber me tomorrow', INTENTS.REMINDER_CREATE, { hasDate: true }),
   c('remindar rent payment', INTENTS.REMINDER_CREATE),
   c('alrm 6 am', INTENTS.REMINDER_CREATE, { hasDate: true }),
@@ -79,10 +79,10 @@ const spelling = [
 ]
 
 const shortMessages = [
-  c('Netflix tomorrow', INTENTS.SUBSCRIPTION_QUERY, { queryType: 'expiry', serviceName: 'Netflix', hasDate: true }),
+  c('Netflix tomorrow', INTENTS.UNKNOWN, { clarify: 'short', serviceName: 'Netflix' }),
   c('Prime 23rd', INTENTS.SUBSCRIPTION_CREATE, { serviceName: 'Prime', hasDate: true, entityType: 'subscription' }),
-  c('Spotify next week', INTENTS.SUBSCRIPTION_QUERY, { queryType: 'expiry', serviceName: 'Spotify', hasDate: true }),
-  c('ChatGPT June 20', INTENTS.SUBSCRIPTION_QUERY, { queryType: 'expiry', serviceName: 'ChatGPT', hasDate: true }),
+  c('Spotify next week', INTENTS.SUBSCRIPTION_EXPIRY, { queryType: 'expiry', serviceName: 'Spotify', hasDate: true }),
+  c('ChatGPT June 20', INTENTS.SUBSCRIPTION_EXPIRY, { queryType: 'expiry', serviceName: 'ChatGPT', hasDate: true }),
   c('Rent 1st', INTENTS.REMINDER_CREATE, { hasDate: true }),
   c('Milk tonight', INTENTS.REMINDER_CREATE, { hasDate: true }),
   c('Mom tomorrow', INTENTS.REMINDER_CREATE, { hasDate: true }),
@@ -92,11 +92,11 @@ const shortMessages = [
 ]
 
 const naturalLanguage = [
-  c('My Netflix time is over tomorrow', INTENTS.SUBSCRIPTION_QUERY, { queryType: 'expiry', serviceName: 'Netflix', hasDate: true }),
-  c('My Prime package finishes next week', INTENTS.SUBSCRIPTION_QUERY, { queryType: 'expiry', serviceName: 'Prime', hasDate: true }),
-  c('Spotify will stop working on Sunday', INTENTS.SUBSCRIPTION_QUERY, { queryType: 'expiry', serviceName: 'Spotify', hasDate: true }),
-  c('ChatGPT premium is valid only till Friday', INTENTS.SUBSCRIPTION_QUERY, { queryType: 'expiry', serviceName: 'ChatGPT', hasDate: true }),
-  c('My Cursor subscription runs out tonight', INTENTS.SUBSCRIPTION_QUERY, { queryType: 'expiry', hasDate: true }),
+  c('My Netflix time is over tomorrow', INTENTS.SUBSCRIPTION_EXPIRY, { queryType: 'expiry', serviceName: 'Netflix', hasDate: true }),
+  c('My Prime package finishes next week', INTENTS.SUBSCRIPTION_EXPIRY, { queryType: 'expiry', serviceName: 'Prime', hasDate: true }),
+  c('Spotify will stop working on Sunday', INTENTS.SUBSCRIPTION_EXPIRY, { queryType: 'expiry', serviceName: 'Spotify', hasDate: true }),
+  c('ChatGPT premium is valid only till Friday', INTENTS.SUBSCRIPTION_EXPIRY, { queryType: 'expiry', serviceName: 'ChatGPT', hasDate: true }),
+  c('My Cursor subscription runs out tonight', INTENTS.SUBSCRIPTION_EXPIRY, { queryType: 'expiry', hasDate: true }),
   c('I need Netflix again on 27th every month', INTENTS.SUBSCRIPTION_CREATE, { serviceName: 'Netflix', hasRecurrence: true, entityType: 'subscription' }),
   c('Prime payment gets deducted on the 23rd', INTENTS.SUBSCRIPTION_CREATE, { serviceName: 'Prime', hasDate: true, entityType: 'subscription' }),
   c('Spotify charges me every month on the 10th', INTENTS.SUBSCRIPTION_CREATE, { serviceName: 'Spotify', hasRecurrence: true, entityType: 'subscription' }),

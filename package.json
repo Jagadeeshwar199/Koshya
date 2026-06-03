@@ -12,6 +12,8 @@
     "test:intents": "node tests/intent.test.js",
     "test:intent-semantic": "node tests/intent-semantic.test.js",
     "test:user-intent-examples": "node tests/user-intent-examples.test.js",
+    "test:parser-validation": "node tests/parser-validation.js",
+    "test:production-routing": "node tests/production-routing.test.js",
     "test:intent-router": "node tests/intent-router.test.js",
     "test:reminder-confirmation": "node tests/reminder-confirmation.test.js",
     "test:reminder-query": "node tests/reminder-query.test.js",

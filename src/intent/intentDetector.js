@@ -221,17 +221,29 @@ function scoreSignals(text, lower, entities, threshold) {
     scores[INTENTS.DELETE_ENTITY] = 0.35
   }
 
+  const docRenewal = /\b(?:passport|licen[sc]e|driving)\s+renewal\b/i.test(lower)
+  if (docRenewal && hasFutureSchedule(entities)) {
+    scores[INTENTS.REMINDER_CREATE] = Math.max(scores[INTENTS.REMINDER_CREATE], 0.94)
+    scores[INTENTS.SUBSCRIPTION_UPDATE] = 0.3
+  }
+
   if (
     updateSemantic > 0.35 &&
     entities.serviceName &&
     /\b(?:amount|renewal|date|subscription)\b/.test(lower) &&
+    !docRenewal &&
     !subscriptionSetupPhrase &&
     !(/\brenewal\b/i.test(lower) && /\btrack\b/i.test(lower)) &&
     deleteSemantic < 0.4
   ) {
     scores[INTENTS.SUBSCRIPTION_UPDATE] = clamp(0.88 + updateSemantic * 0.1)
     scores[INTENTS.REMINDER_CREATE] = Math.min(scores[INTENTS.REMINDER_CREATE], 0.45)
-  } else if (updateSemantic > 0.35 && subscriptionSemantic > 0.2 && !subscriptionSetupPhrase) {
+  } else if (
+    updateSemantic > 0.35 &&
+    subscriptionSemantic > 0.2 &&
+    !subscriptionSetupPhrase &&
+    !docRenewal
+  ) {
     scores[INTENTS.SUBSCRIPTION_UPDATE] = clamp(0.6 + updateSemantic * 0.3)
   }
 
@@ -288,7 +300,7 @@ function scoreSignals(text, lower, entities, threshold) {
   }
 
   if (
-    /\b(?:ends?|expires?|expired|runs out|valid till|active till)\b/.test(lower) &&
+    /\b(?:ends?|expires?|expired|runs out|valid till|active(?:\s+only)?\s+till|only till)\b/.test(lower) &&
     (entities.serviceName || subscriptionSemantic > 0.25) &&
     hasFutureSchedule(entities) &&
     !looksLikeSubscriptionSetup
@@ -498,7 +510,7 @@ function scoreSignals(text, lower, entities, threshold) {
   }
 
   if (
-    /\b(?:ending|finishes|finishing|runs out|time is over|stop working|valid only till|package finishes)\b/i.test(
+    /\b(?:ending|finishes|finishing|runs out|time is over|stop working|valid only till|active only till|package finishes)\b/i.test(
       lower
     ) &&
     (entities.serviceName || subscriptionSemantic > 0.2)
@@ -517,26 +529,13 @@ function scoreSignals(text, lower, entities, threshold) {
     scores[INTENTS.SUBSCRIPTION_DELETE] = 0.3
   }
 
-  if (
-    entities.serviceName &&
-    hasFutureSchedule(entities) &&
-    /^(?:my\s+)?[a-z][a-z0-9+.\s-]{1,28}\s+(?:tomorrow|today|tonight|next week|next month|friday|monday|tuesday|wednesday|thursday|saturday|sunday)$/i.test(
-      text.trim()
-    ) &&
-    !/\b(?:renew|remind|milk|mom|doctor|gym|emi|rent|pay|call|buy|need|must|submit|form)\b/i.test(
-      lower
-    ) &&
-    !/\b(?:ping|notify|alert|wake)\s+me\b/i.test(lower) &&
-    /\b(?:netflix|prime|spotify|chatgpt|cursor|canva|hotstar|jio|disney|youtube)\b/i.test(lower)
-  ) {
-    scores[INTENTS.SUBSCRIPTION_EXPIRY] = 0.94
-    scores[INTENTS.REMINDER_CREATE] = 0.35
-  }
 
   if (
     entities.serviceName &&
     (entities.date?.kind === 'day' || /\b\d{1,2}(?:st|nd|rd|th)?\b/.test(lower)) &&
-    (/\brenews?\b/i.test(lower) || /\b(?:monthly|yearly|renewal)\b/i.test(lower)) &&
+    (/\brenews?\b/i.test(lower) ||
+      /\b(?:monthly|yearly)\b/i.test(lower) ||
+      (/\brenewal\b/i.test(lower) && /\b\d{1,2}(?:st|nd|rd|th)?\b/i.test(lower))) &&
     !/^(?:rent|emi|mom|milk|doctor|gym)\b/i.test(lower)
   ) {
     scores[INTENTS.SUBSCRIPTION_CREATE] = 0.93
@@ -576,6 +575,29 @@ function scoreSignals(text, lower, entities, threshold) {
     scores[INTENTS.REMINDER_RESCHEDULE] = 0.32
   }
 
+  if (/\bwon'?t\s+work\b/i.test(lower) && entities.serviceName) {
+    scores[INTENTS.SUBSCRIPTION_EXPIRY] = 0.92
+    scores[INTENTS.SUBSCRIPTION_CREATE] = 0.32
+  }
+  if (/\b(?:gets\s+deducted|payment\s+every)\b/i.test(lower) && entities.serviceName) {
+    scores[INTENTS.SUBSCRIPTION_CREATE] = 0.93
+    scores[INTENTS.REMINDER_CREATE] = 0.32
+  }
+  if (/\b(?:renews?\s+annually|renewal\s+every\s+year)\b/i.test(lower) && entities.serviceName) {
+    scores[INTENTS.SUBSCRIPTION_CREATE] = 0.95
+    scores[INTENTS.SUBSCRIPTION_UPDATE] = 0.3
+  }
+
+  if (/\bfinishes?\s+this\s+month\b/i.test(lower) && entities.serviceName) {
+    scores[INTENTS.SUBSCRIPTION_EXPIRY] = 0.91
+    scores[INTENTS.REMINDER_CREATE] = 0.35
+  }
+
+  if (/\brenews?\s+next\s+year\b/i.test(lower) && entities.serviceName) {
+    scores[INTENTS.SUBSCRIPTION_CREATE] = 0.93
+    scores[INTENTS.UNKNOWN] = 0.3
+  }
+
   if (
     /\b(?:charges?\s+me|payment\s+gets\s+deducted|takes\s+money|bill\s+comes|need\s+.+\s+again)\b/i.test(
       lower
@@ -602,13 +624,23 @@ function scoreSignals(text, lower, entities, threshold) {
   }
 
   if (
-    /\b(?:renews?|renewal)\s+next\s+month\b/i.test(lower) &&
-    entities.serviceName
+    /\b(?:renews?|renewal)\s+next\s+(?:month|week)\b/i.test(lower) &&
+    entities.serviceName &&
+    !/\b(?:passport|licen[cs]e)\b/i.test(lower) &&
+    !/\b(?:need|must)\b/i.test(lower)
   ) {
     scores[INTENTS.SUBSCRIPTION_CREATE] = 0.96
     scores[INTENTS.SUBSCRIPTION_QUERY] = 0.3
     scores[INTENTS.SUBSCRIPTION_EXPIRY] = 0.3
     scores[INTENTS.REMINDER_RESCHEDULE] = 0.32
+  }
+  if (hasFutureSchedule(entities) && /\b(?:call|pay|buy)\b/i.test(lower) && actionSemantic > 0.3) {
+    scores[INTENTS.REMINDER_CREATE] = 0.93
+    scores[INTENTS.UNKNOWN] = 0.3
+  }
+  if (/\bpay\s+rent\b/i.test(lower) && hasFutureSchedule(entities)) {
+    scores[INTENTS.REMINDER_CREATE] = 0.93
+    scores[INTENTS.SUBSCRIPTION_UPDATE] = 0.32
   }
 
   if (
@@ -625,6 +657,14 @@ function scoreSignals(text, lower, entities, threshold) {
     scores[INTENTS.REMINDER_CREATE] = 0.94
     scores[INTENTS.REMINDER_QUERY] = 0.32
   }
+  if (/\bremind\b/i.test(lower) && /\b(?:call|pay|buy)\b/i.test(lower)) {
+    scores[INTENTS.REMINDER_CREATE] = 0.92
+    scores[INTENTS.UNKNOWN] = 0.3
+  }
+  if (/^tomorrow\s+morning\b/i.test(lower) || /\b(?:gym|doctor)\b/i.test(lower) && /\b(?:tomorrow|morning)\b/i.test(lower)) {
+    scores[INTENTS.REMINDER_CREATE] = 0.93
+    scores[INTENTS.REMINDER_RESCHEDULE] = 0.32
+  }
 
   if (reminderSemantic > 0.65 && (hasFutureSchedule(entities) || /\b\d{1,2}\s*(?:am|pm)\b/i.test(lower))) {
     scores[INTENTS.REMINDER_CREATE] = Math.max(scores[INTENTS.REMINDER_CREATE], 0.93)
@@ -634,6 +674,7 @@ function scoreSignals(text, lower, entities, threshold) {
   if (
     /\bnext\s+(?:week|month)\b/i.test(lower) &&
     entities.serviceName &&
+    !docRenewal &&
     !/\brenews?\b/i.test(lower) &&
     !/\b(?:change|update|reschedule|move)\b/i.test(lower) &&
     expirySemantic < 0.5
@@ -642,11 +683,9 @@ function scoreSignals(text, lower, entities, threshold) {
     scores[INTENTS.REMINDER_RESCHEDULE] = Math.min(scores[INTENTS.REMINDER_RESCHEDULE], 0.35)
   }
 
-  if (
-    /\b(?:passport|licen[cs]e)\s+renewal\b/i.test(lower) &&
-    hasFutureSchedule(entities)
-  ) {
+  if (docRenewal && hasFutureSchedule(entities)) {
     scores[INTENTS.REMINDER_CREATE] = 0.94
+    scores[INTENTS.SUBSCRIPTION_EXPIRY] = 0.3
     scores[INTENTS.SUBSCRIPTION_QUERY] = 0.3
   }
 
@@ -744,8 +783,51 @@ function scoreSignals(text, lower, entities, threshold) {
     scores[INTENTS.REMINDER_CREATE] = 0.32
   }
 
+  if (!isExplicitQuery(lower)) {
+    scores[INTENTS.REMINDER_QUERY] = Math.min(scores[INTENTS.REMINDER_QUERY], 0.41)
+    scores[INTENTS.SUBSCRIPTION_QUERY] = Math.min(scores[INTENTS.SUBSCRIPTION_QUERY], 0.41)
+  }
+
+  if (
+    /\brenewal\b/i.test(lower) &&
+    /\b(?:today|tomorrow)\b/i.test(lower) &&
+    entities.serviceName &&
+    !/\brenews?\b/i.test(lower)
+  ) {
+    scores[INTENTS.REMINDER_QUERY] = 0.96
+    scores[INTENTS.SUBSCRIPTION_CREATE] = 0.32
+    scores[INTENTS.SUBSCRIPTION_EXPIRY] = 0.32
+  }
+
+  if (
+    entities.serviceName &&
+    hasFutureSchedule(entities) &&
+    !docRenewal &&
+    (/\b(?:expires?|runs?\s+out|ends?|stops?|finishes?)\b/i.test(lower) ||
+      (/\bnext\s+(?:week|month)\b/i.test(lower) &&
+        !/\brenews?\b/i.test(lower) &&
+        !/\b(?:must|need|pay|bill)\b/i.test(lower)))
+  ) {
+    scores[INTENTS.SUBSCRIPTION_EXPIRY] = Math.max(scores[INTENTS.SUBSCRIPTION_EXPIRY], 0.94)
+    scores[INTENTS.REMINDER_CREATE] = Math.min(scores[INTENTS.REMINDER_CREATE], 0.38)
+  }
+
   return scores
 }
+
+const INTENT_PRIORITY = [
+  INTENTS.SUBSCRIPTION_CREATE,
+  INTENTS.SUBSCRIPTION_UPDATE,
+  INTENTS.REMINDER_CREATE,
+  INTENTS.SUBSCRIPTION_EXPIRY,
+  INTENTS.REMINDER_RESCHEDULE,
+  INTENTS.REMINDER_CANCEL,
+  INTENTS.SUBSCRIPTION_DELETE,
+  INTENTS.DELETE_ENTITY,
+  INTENTS.REMINDER_UPDATE,
+  INTENTS.SUBSCRIPTION_QUERY,
+  INTENTS.REMINDER_QUERY
+]
 
 function resolveQueryType(text, lower, intent) {
   if (intent !== INTENTS.SUBSCRIPTION_QUERY && intent !== INTENTS.SUBSCRIPTION_EXPIRY) {
@@ -766,7 +848,19 @@ function resolveQueryType(text, lower, intent) {
   return {}
 }
 
-function pickBestIntent(scores) {
+function isExplicitQuery(lower) {
+  return (
+    /\b(?:show|list|display|what|which|view|tell\s+me|how\s+many)\b/i.test(lower) ||
+    (/\breminders?\b/i.test(lower) &&
+      /\b(?:today|tomorrow|tomorrows|upcoming)\b/i.test(lower) &&
+      !/\bremind\s+me\b/i.test(lower) &&
+      !/\b(?:change|move|update|reschedule)\b/i.test(lower)) ||
+    (/\breminder\b/i.test(lower) && /\b(?:show|list|what|which|my|existing)\b/i.test(lower)) ||
+    (/\bsubscriptions?\b/i.test(lower) && /\b(?:today|tomorrow|tomorrows)\b/i.test(lower))
+  )
+}
+
+function pickBestIntent(scores, lower = '') {
   const strong = Object.entries(scores).filter(
     ([intent, score]) => intent !== INTENTS.UNKNOWN && score >= MIN_CONFIDENCE
   )
@@ -775,17 +869,48 @@ function pickBestIntent(scores) {
     return { intent: INTENTS.UNKNOWN, confidence: 0.35 }
   }
 
+  if (isExplicitQuery(lower)) {
+    for (const q of [INTENTS.REMINDER_QUERY, INTENTS.SUBSCRIPTION_QUERY]) {
+      if (scores[q] >= MIN_CONFIDENCE) {
+        return { intent: q, confidence: clamp(scores[q]) }
+      }
+    }
+  }
+
   let bestIntent = INTENTS.UNKNOWN
   let bestScore = 0
 
   for (const [intent, score] of strong) {
-    if (score > bestScore) {
+    const pri = INTENT_PRIORITY.indexOf(intent)
+    const rank = pri === -1 ? 99 : pri
+    if (
+      score > bestScore + 0.02 ||
+      (score >= bestScore - 0.02 && rank < (INTENT_PRIORITY.indexOf(bestIntent) === -1 ? 99 : INTENT_PRIORITY.indexOf(bestIntent)))
+    ) {
       bestScore = score
       bestIntent = intent
     }
   }
 
   return { intent: bestIntent, confidence: clamp(bestScore) }
+}
+
+function isShortAmbiguous(text, lower, entities) {
+  if (
+    (/\b(?:reminders?|subscriptions?|notify|notifiy|ping|alarm|wake)\b/i.test(lower) &&
+      /\b(?:today|tomorrow|tomorrows|tonight)\b/i.test(lower)) ||
+    /^(?:milk|mom|gym|doctor|rent|emi)\s+(?:tomorrow|today|tonight|\d)/i.test(text.trim())
+  ) {
+    return false
+  }
+  return (
+    entities.serviceName &&
+    entities.date &&
+    /^(?:my\s+)?[a-z0-9+]{2,24}\s+(?:tomorrow|today|tonight)$/i.test(text.trim()) &&
+    !/\b(?:show|list|display|what|which|view|renew|remind|expir(?:e|es|y)|ends?|ending|finishes|runs|valid|renews?)\b/i.test(
+      lower
+    )
+  )
 }
 
 function buildResult(intent, confidence, text, entities, extra = {}) {
@@ -804,6 +929,26 @@ function buildResult(intent, confidence, text, entities, extra = {}) {
   }
 }
 
+function clauseParts(text) {
+  let parts = [text]
+  for (const sep of [/\s+and\s+/i, /\s+(?=remind(?:ar)?\s+me\b)/i, /\s+(?=notify\s+me\b)/i]) {
+    const next = []
+    for (const p of parts) {
+      for (const bit of p.split(sep)) {
+        const s = bit.trim()
+        if (s.length > 3) next.push(s)
+      }
+    }
+    if (next.length > 1) parts = next
+  }
+  return parts.length > 1 ? parts : [text]
+}
+
+function detectClauseIntents(message) {
+  const text = normalizeText(applyTypoFixes(message))
+  return clauseParts(text).map((p) => detectIntent(p))
+}
+
 function detectIntent(message) {
   const text = normalizeText(applyTypoFixes(message))
   const lower = normalizeForIntentMatch(text)
@@ -815,12 +960,17 @@ function detectIntent(message) {
   const entities = extractEntities(text)
   const threshold = DEFAULT_FUZZY_THRESHOLD
   const scores = scoreSignals(text, lower, entities, threshold)
-  const { intent, confidence } = pickBestIntent(scores)
-  const routedIntent =
-    intent === INTENTS.SUBSCRIPTION_EXPIRY ? INTENTS.SUBSCRIPTION_QUERY : intent
-  const extra = resolveQueryType(text, lower, intent)
+  if (isShortAmbiguous(text, lower, entities)) {
+    return buildResult(INTENTS.UNKNOWN, 0.38, text, entities, { clarify: 'short' })
+  }
 
-  return buildResult(routedIntent, confidence, text, entities, extra)
+  const { intent, confidence } = pickBestIntent(scores, lower)
+  const extra =
+    intent === INTENTS.SUBSCRIPTION_EXPIRY
+      ? { queryType: 'expiry' }
+      : resolveQueryType(text, lower, intent)
+
+  return buildResult(intent, confidence, text, entities, extra)
 }
 
 function mergeDateEntities(base, patch) {
@@ -865,6 +1015,7 @@ function needsExplicitTimePrompt(entities = {}, text = '') {
 module.exports = {
   INTENTS,
   detectIntent,
+  detectClauseIntents,
   mergeDateEntities,
   needsExplicitTimePrompt,
   extractOffset,

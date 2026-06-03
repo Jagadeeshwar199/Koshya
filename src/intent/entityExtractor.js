@@ -62,7 +62,7 @@ function extractRecurrence(text) {
   if (/\b(?:monthly|every\s+month|per\s+month)\b/.test(lower)) {
     return 'monthly'
   }
-  if (/\b(?:yearly|every\s+year|annually)\b/.test(lower)) {
+  if (/\b(?:yearly|every\s+year|annually|every\s+12\s+months?)\b/.test(lower)) {
     return 'yearly'
   }
   if (/\bevery\s+(\d+)\s+months?\b/.test(lower)) {
@@ -232,6 +232,18 @@ function extractDate(text) {
       value: 'next_week',
       ...(time ? { time } : {})
     }
+  }
+
+  if (/\bday after tomorrow\b/.test(lower)) {
+    return { kind: 'relative', value: 'day_after_tomorrow', ...(time ? { time } : {}) }
+  }
+
+  if (/\bmidnight\b/.test(lower)) {
+    return { kind: 'time_only', time: { hour: 0, minute: 0, source: 'explicit' } }
+  }
+
+  if (/\bthis\s+month\b/.test(lower)) {
+    return { kind: 'relative', value: 'this_month', ...(time ? { time } : {}) }
   }
 
   if (/\bnext month\b/.test(lower)) {
@@ -409,7 +421,7 @@ function extractServiceName(text) {
 
 const BLOCKED_SERVICE_NAMES = new Set([
   'need', 'must', 'should', 'call', 'pay', 'buy', 'doctor', 'appointment', 'me', 'my',
-  'remind me to', 'remind me', 'driving licence', 'driving license', 'before', 'after'
+  'remind me to', 'remind me', 'remaind', 'remind mom', 'driving licence', 'driving license', 'before', 'after'
 ])
 
 function extractActionText(text) {

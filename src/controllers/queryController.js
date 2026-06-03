@@ -23,8 +23,29 @@ const {
   formatSubscriptionUpdated,
   formatSubscriptionRemoved
 } = require('../formatters/subscriptionFormatter')
-const { HELP_TEXT, WELCOME_TEXT, clarifyLowConfidence, unknownReply } = require('../utils/uxMessages')
+const { registerService } = require('../intent/serviceCatalog')
+const { HELP_TEXT, WELCOME_TEXT, clarifyLowConfidence, ambiguousShortReply, unknownReply } = require('../utils/uxMessages')
 const { PAGE_SIZE } = require('./paginationController')
+
+async function handleSubscriptionExpiryIntent(sender, intent) {
+  const name = intent.entities.serviceName
+  const subs = await getUserSubscriptions(sender)
+  const matched = name ? matchSubscriptionsByService(subs, name) : []
+
+  if (matched.length) {
+    const reply = await sendWhatsAppMessage(sender, `📅 Expiry\n\n${formatSubscription(matched[0])}`)
+    return { ok: true, intent: 'SUBSCRIPTION_EXPIRY', subscriptions: matched, replySent: reply.success }
+  }
+
+  if (name) {
+    registerService(name)
+  }
+  const reply = await sendWhatsAppMessage(
+    sender,
+    `${name || 'That service'} isn't tracked yet.\n\nAdd:\n${name} renews on 27th every month - 149`
+  )
+  return { ok: true, intent: 'SUBSCRIPTION_EXPIRY', subscriptions: [], replySent: reply.success }
+}
 
 async function handleSubscriptionQueryIntent(sender, intent) {
   const subscriptions = await getUserSubscriptions(sender)
@@ -51,20 +72,6 @@ async function handleSubscriptionQueryIntent(sender, intent) {
       ? ranked.map(({ sub }) => formatSubscription(sub)).join('\n')
       : 'No upcoming renewals.'
     const reply = await sendWhatsAppMessage(sender, `📺 Next renewals\n\n${body}`)
-    return { ok: true, intent: intent.intent, subscriptions: filtered, replySent: reply.success }
-  }
-
-  if (intent.entities.queryType === 'expiry') {
-    const filtered = subscriptions.filter((sub) => {
-      const name = intent.entities.serviceName
-      return name
-        ? sub.serviceName.toLowerCase().includes(name.toLowerCase())
-        : true
-    })
-    const body = filtered.length
-      ? filtered.map((sub) => formatSubscription(sub)).join('\n')
-      : 'No matching subscriptions.'
-    const reply = await sendWhatsAppMessage(sender, `Expiring soon\n\n${body}`)
     return { ok: true, intent: intent.intent, subscriptions: filtered, replySent: reply.success }
   }
 
@@ -279,20 +286,28 @@ async function handleHelpIntent(sender, intent) {
   return { ok: true, intent: intent.intent, replySent: reply.success }
 }
 
-async function handleUnknownIntent(sender, intent, text = '') {
-  const reply = await sendWhatsAppMessage(sender, unknownReply(intent.rawText || text))
+async function handleClarifyIntent(sender, intent) {
+  const msg =
+    intent.entities.clarify === 'short'
+      ? ambiguousShortReply(intent.entities.serviceName)
+      : clarifyLowConfidence(intent.intent) || unknownReply()
+  const reply = await sendWhatsAppMessage(sender, msg)
   return { ok: true, intent: intent.intent, replySent: reply.success }
 }
 
-async function handleClarifyIntent(sender, intent) {
-  const msg = clarifyLowConfidence(intent.intent) || unknownReply()
-  const reply = await sendWhatsAppMessage(sender, msg)
+async function handleUnknownIntent(sender, intent, text = '') {
+  if (intent.entities.clarify === 'short') {
+    const reply = await sendWhatsAppMessage(sender, ambiguousShortReply(intent.entities.serviceName))
+    return { ok: true, intent: intent.intent, replySent: reply.success }
+  }
+  const reply = await sendWhatsAppMessage(sender, unknownReply(intent.rawText || text))
   return { ok: true, intent: intent.intent, replySent: reply.success }
 }
 
 module.exports = {
   handleDeleteEntityIntent,
   handleSubscriptionDeleteIntent,
+  handleSubscriptionExpiryIntent,
   handleSubscriptionQueryIntent,
   handleSubscriptionUpdateIntent,
   handleHelpIntent,
