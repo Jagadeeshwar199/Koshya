@@ -27,7 +27,7 @@ assert.equal(
     },
     new Date('2026-05-31T18:25:00.000Z')
   ),
-`✅ Reminder removed
+`🗑️ Reminder deleted
 
 Exercise`
 )

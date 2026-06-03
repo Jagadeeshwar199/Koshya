@@ -13,6 +13,7 @@ const INTENTS = {
   REMINDER_UPDATE: 'REMINDER_UPDATE',
   REMINDER_RESCHEDULE: 'REMINDER_RESCHEDULE',
   REMINDER_CANCEL: 'REMINDER_CANCEL',
+  DELETE_ENTITY: 'DELETE_ENTITY',
   REMINDER_QUERY: 'REMINDER_QUERY',
   HELP: 'HELP',
   LIST_MORE: 'LIST_MORE',
@@ -62,12 +63,30 @@ function isSubscriptionDeleteText(text) {
   }
 
   return (
-    /\b(?:delete|cancel|remove)\b/.test(text) &&
-      /\bsubscription\b/.test(text)
-  ) ||
+    (/\b(?:delete|cancel|remove)\b/.test(text) &&
+      /\bsubscription\b/.test(text)) ||
     /\bstop tracking\b/.test(text) ||
-    /^remove\s+[a-z0-9+.\s-]+$/i.test(text) ||
-    /^(?:delete|cancel|remove)\s+[a-z0-9+.\s-]+$/i.test(text)
+    /^remove\s+[a-z0-9+.\s-]+$/i.test(text)
+  )
+}
+
+function isGenericDeleteText(text) {
+  if (/^(?:delete|cancel|remove)\s+(?:everything|all)\b/i.test(text)) {
+    return false
+  }
+  if (/\b(?:reminder|reminders)\b/.test(text)) {
+    return false
+  }
+  if (/\bsubscription\b/.test(text)) {
+    return false
+  }
+  if (/\bstop\s+(?:tracking|reminding)\b/.test(text)) {
+    return false
+  }
+  if (/^remove\s+[a-z0-9+.\s-]+$/i.test(text)) {
+    return false
+  }
+  return /^(?:delete|cancel)\s+[a-z0-9+.\s-]+$/i.test(text)
 }
 
 function titleCase(value) {
@@ -368,6 +387,10 @@ function detectIntent(message) {
 
   if (isSubscriptionDeleteText(lower)) {
     return buildResult(INTENTS.SUBSCRIPTION_DELETE, 0.94, text)
+  }
+
+  if (isGenericDeleteText(lower)) {
+    return buildResult(INTENTS.DELETE_ENTITY, 0.94, text)
   }
 
   if (/\b(?:remind me|create a reminder|set a reminder|add a reminder)\b/.test(lower)) {

@@ -37,6 +37,8 @@
 - Subscription follow-ups fail if `getPending` routing is skipped before `handleUnknownIntent`.
 
 ## UX
+- Minimal replies: 2–4 lines; no post-action suggestion spam.
+- `delete <name>` → unified resolver (reminder before subscription; clarify if ambiguous).
 - Greetings: `hi`, `hello`, `start`, `help` → welcome (`HELP` intent).
 - Ask only for **missing** fields; give one short example.
 - Lists: paginate; `LIST_MORE` for next page.

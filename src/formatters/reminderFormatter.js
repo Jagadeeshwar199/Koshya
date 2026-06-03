@@ -1,6 +1,5 @@
 const { computeNextRenewalDate, resolveTriggerAt } = require('../services/reminderService')
-
-const { REM_SAVED_NEXT } = require('../utils/uxMessages')
+const { unpackReminderMessage } = require('../services/reminderService')
 
 function getIstParts(date) {
   const formatter = new Intl.DateTimeFormat('en-IN', {
@@ -37,13 +36,13 @@ function addDays(date, days) {
 
 function formatReminderTime(triggerAt, now = new Date()) {
   if (!triggerAt) {
-    return { dateLabel: 'No delivery time set', timeLabel: '' }
+    return { dateLabel: 'No time set', timeLabel: '' }
   }
 
   const triggerDate = new Date(triggerAt)
   const parts = getIstParts(triggerDate)
   const time = parts.minute === '00'
-    ? `${parts.hour} ${parts.dayPeriod.toUpperCase()}`
+    ? `${parts.hour}:00 ${parts.dayPeriod.toUpperCase()}`
     : `${parts.hour}:${parts.minute} ${parts.dayPeriod.toUpperCase()}`
   const triggerKey = getIstDateKey(triggerDate)
   const todayKey = getIstDateKey(now)
@@ -63,41 +62,64 @@ function formatReminderTime(triggerAt, now = new Date()) {
   }
 }
 
+function formatReminderScheduleLine(reminder, now = new Date()) {
+  const { daily } = unpackReminderMessage(reminder.message)
+  const formatted = formatReminderTime(reminder.triggerAt, now)
+
+  if (daily) {
+    return `Every day · ${formatted.timeLabel}`
+  }
+
+  const diffMs = new Date(reminder.triggerAt).getTime() - now.getTime()
+  if (diffMs > 0 && diffMs < 24 * 60 * 60 * 1000) {
+    const minutes = Math.max(1, Math.round(diffMs / 60000))
+    if (minutes < 180) {
+      return `In ${minutes} minute${minutes === 1 ? '' : 's'}`
+    }
+  }
+
+  return `${formatted.dateLabel} · ${formatted.timeLabel}`
+}
+
+function displayReminderTitle(message) {
+  const { title } = unpackReminderMessage(message)
+  if (!title) {
+    return 'Reminder'
+  }
+  return title.charAt(0).toUpperCase() + title.slice(1)
+}
+
 function formatReminderListTime(triggerAt, now = new Date()) {
-  const formatted = formatReminderTime(triggerAt, now)
-  return `${formatted.dateLabel}, ${formatted.timeLabel}`
+  return formatReminderScheduleLine({ message: '', triggerAt }, now)
 }
 
 function formatReminderConfirmation(reminder, now = new Date()) {
-  const formatted = formatReminderTime(reminder.triggerAt, now)
-
   return `✅ Reminder set
 
-${reminder.message}
-${formatted.dateLabel}, ${formatted.timeLabel}${REM_SAVED_NEXT}`
+${displayReminderTitle(reminder.message)}
+${formatReminderScheduleLine(reminder, now)}`
 }
 
 function formatReminderUpdateConfirmation(reminder, now = new Date()) {
-  const formatted = formatReminderTime(reminder.triggerAt, now)
-
   return `✅ Reminder updated
 
-${reminder.message}
-${formatted.dateLabel}, ${formatted.timeLabel}${REM_SAVED_NEXT}`
+${displayReminderTitle(reminder.message)}
+${formatReminderScheduleLine(reminder, now)}`
 }
 
 function formatReminderCancelConfirmation(reminder) {
-  return `✅ Reminder removed
+  return `🗑️ Reminder deleted
 
-${reminder.message}`
+${displayReminderTitle(reminder.message)}`
 }
 
 function formatManualReminderSummary(reminder, now = new Date()) {
-  return `• ${reminder.message} — ${formatReminderListTime(reminder.triggerAt, now)}`
+  return `• ${displayReminderTitle(reminder.message)}
+${formatReminderScheduleLine(reminder, now)}`
 }
 
 function formatReminderOption(reminder, index, now = new Date()) {
-  return `${index + 1}. ${reminder.message} — ${formatReminderListTime(reminder.triggerAt, now)}`
+  return `${index + 1}. ${displayReminderTitle(reminder.message)} — ${formatReminderScheduleLine(reminder, now)}`
 }
 
 function recurrenceLabel(recurrence) {
@@ -161,6 +183,7 @@ function reminderMatchesDate(reminder, dateEntity, now = new Date()) {
 module.exports = {
   formatReminderTime,
   formatReminderListTime,
+  formatReminderScheduleLine,
   formatReminderConfirmation,
   formatReminderUpdateConfirmation,
   formatReminderCancelConfirmation,
@@ -170,5 +193,6 @@ module.exports = {
   formatSubscriptionReminderSummary,
   reminderMatchesDate,
   getIstDateKey,
-  subscriptionToReminderDate
+  subscriptionToReminderDate,
+  displayReminderTitle
 }

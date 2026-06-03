@@ -409,19 +409,45 @@ function resolveTriggerAt(dateEntity, now = new Date()) {
   return dateFromIstParts(targetParts)
 }
 
+const DAILY_REMINDER_PREFIX = '[d]'
+
+function packReminderMessage(title, options = {}) {
+  const clean = String(title || '').trim()
+  if (!clean) {
+    return 'Reminder'
+  }
+  if (options.daily) {
+    return `${DAILY_REMINDER_PREFIX}${clean}`
+  }
+  return clean
+}
+
+function unpackReminderMessage(message) {
+  const raw = String(message || '')
+  if (raw.startsWith(DAILY_REMINDER_PREFIX)) {
+    return { title: raw.slice(DAILY_REMINDER_PREFIX.length), daily: true }
+  }
+  return { title: raw, daily: false }
+}
+
 function stripReminderSchedulingWords(text) {
   return String(text || '')
     .replace(/\b(?:remind me|create a reminder|set a reminder|add a reminder)\b/gi, ' ')
+    .replace(/\b(?:daily|every\s+day)\b/gi, ' ')
     .replace(/\b(?:tomorrow|today|tonight|next week|next month)\b/gi, ' ')
-    .replace(/\b(?:about|for|to|at|on|in|the|a|an)\b/gi, ' ')
+    .replace(/\b(?:about|for|to|on|in|the|a|an)\b/gi, ' ')
+    .replace(/\bby\s*$/i, ' ')
+    .replace(/\bat\s*$/i, ' ')
     .replace(/\b(?:morning|afternoon|evening|night)\b/gi, ' ')
     .replace(/\b(?:next|week|month|sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/gi, ' ')
     .replace(/\b(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\b/gi, ' ')
     .replace(/\b(?:on|date)\s+(?:the\s+)?\d{1,2}(?:st|nd|rd|th)?\b/gi, ' ')
     .replace(/\b\d{1,2}(?:st|nd|rd|th)?\b/gi, ' ')
     .replace(/\b(?:in|after)\s+\d+\s*(?:minutes?|mins?|hours?|hrs?|days?)\b/gi, ' ')
+    .replace(/\bat\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b/gi, ' ')
     .replace(/\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/gi, ' ')
     .replace(/\b(?:am|pm)\b/gi, ' ')
+    .replace(/\bat\s*$/i, ' ')
     .replace(/\s+/g, ' ')
     .trim()
 }
@@ -436,6 +462,16 @@ function extractReminderTitle(message, serviceName) {
   )
   if (offsetLead?.[1]) {
     const title = stripReminderSchedulingWords(offsetLead[1])
+    if (title) {
+      return title
+    }
+  }
+
+  const dailyMatch = String(message || '').match(
+    /\bremind\s+me\s+(?:daily|every\s+day)\s+to\s+(.+)/i
+  )
+  if (dailyMatch?.[1]) {
+    const title = stripReminderSchedulingWords(dailyMatch[1])
     if (title) {
       return title
     }
@@ -477,6 +513,8 @@ async function createReminderFromIntent({ userPhone, message, entities = {} }) {
   }
 
   const subject = extractReminderTitle(message, entities.serviceName)
+  const daily = /\b(?:daily|every\s+day)\b/i.test(message)
+  const packedMessage = packReminderMessage(subject, { daily })
   const triggerAt = resolveTriggerAt(entities.date)
 
   logger.info('reminder.schedule', {
@@ -490,7 +528,7 @@ async function createReminderFromIntent({ userPhone, message, entities = {} }) {
     .from('reminders')
     .insert({
       user_phone: userPhone,
-      message: subject,
+      message: packedMessage,
       status: 'pending',
       trigger_at: triggerAt.toISOString(),
       retry_count: 0
@@ -584,9 +622,14 @@ function matchRemindersBySubject(reminders, subject) {
 
   const normalizedSubject = normalizeReminderMessage(subject)
 
-  return reminders.filter((reminder) =>
-    normalizeReminderMessage(reminder.message).includes(normalizedSubject)
-  )
+  return reminders.filter((reminder) => {
+    const { title } = unpackReminderMessage(reminder.message)
+    const normalizedTitle = normalizeReminderMessage(title)
+    return (
+      normalizedTitle.includes(normalizedSubject) ||
+      normalizedSubject.includes(normalizedTitle)
+    )
+  })
 }
 
 async function cancelReminder(id) {
@@ -807,5 +850,7 @@ module.exports = {
   mapReminderRow,
   extractReminderTitle,
   stripReminderSchedulingWords,
+  packReminderMessage,
+  unpackReminderMessage,
   dedupeReminders
 }

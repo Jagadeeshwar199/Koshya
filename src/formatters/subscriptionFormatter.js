@@ -1,5 +1,4 @@
 const { computeNextRenewalDate } = require('../services/reminderService')
-const { SUB_SAVED_NEXT } = require('../utils/uxMessages')
 
 function cycleLabel(recurrence) {
   if (recurrence === 'monthly') {
@@ -63,35 +62,21 @@ function formatSubscription(subscription) {
 }
 
 function formatSubscriptionAdded(parsed) {
-  const fields = {
-    renewalDay: parsed.renewalDay,
-    renewalMonth: parsed.renewalMonth,
-    recurrence: parsed.recurrence
-  }
   return `✅ Subscription added
 
 ${parsed.serviceName}
-₹${parsed.amount}/${cycleLabel(parsed.recurrence)}
-${scheduleLine(fields)}
-${nextLine(fields)}${SUB_SAVED_NEXT}`
+₹${parsed.amount}/${cycleLabel(parsed.recurrence)}`
 }
 
 function formatSubscriptionUpdated(subscription) {
-  const fields = {
-    renewalDay: subscription.renewalDay,
-    renewalMonth: subscription.renewalMonth,
-    recurrence: subscription.recurrence
-  }
   return `✅ Subscription updated
 
 ${subscription.serviceName}
-₹${subscription.amount}/${cycleLabel(subscription.recurrence)}
-${scheduleLine(fields)}
-${nextLine(fields)}${SUB_SAVED_NEXT}`
+₹${subscription.amount}/${cycleLabel(subscription.recurrence)}`
 }
 
 function formatSubscriptionRemoved(subscription) {
-  return `✅ Subscription removed
+  return `🗑️ Subscription deleted
 
 ${subscription.serviceName}`
 }

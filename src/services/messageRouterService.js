@@ -12,6 +12,7 @@ const {
   handleReminderQueryIntent
 } = require('../controllers/reminderController')
 const {
+  handleDeleteEntityIntent,
   handleSubscriptionDeleteIntent,
   handleSubscriptionQueryIntent,
   handleSubscriptionUpdateIntent,
@@ -108,6 +109,10 @@ async function routeWhatsAppMessage(sender, text, options = {}) {
 
   if (intent.intent === INTENTS.SUBSCRIPTION_UPDATE) {
     return handleSubscriptionUpdateIntent(sender, intent)
+  }
+
+  if (intent.intent === INTENTS.DELETE_ENTITY) {
+    return handleDeleteEntityIntent(sender, intent)
   }
 
   if (intent.intent === INTENTS.SUBSCRIPTION_DELETE) {

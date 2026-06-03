@@ -210,10 +210,7 @@ async function handleReminderCancelIntent(sender, intent) {
   })
 
   if (result.status === 'not_found') {
-    const reply = await sendWhatsAppMessage(
-      sender,
-      `I couldn't find an active reminder to cancel.`
-    )
+    const reply = await sendWhatsAppMessage(sender, `No reminder found.`)
 
     return {
       ok: true,
@@ -229,7 +226,7 @@ async function handleReminderCancelIntent(sender, intent) {
       .join('\n')
     const reply = await sendWhatsAppMessage(
       sender,
-      `Which reminder should I cancel?\n\n${options}\n\nReply with the reminder name.`
+      `Which reminder?\n\n${options}`
     )
 
     return {
@@ -266,11 +263,7 @@ async function handleReminderQueryIntent(sender, intent) {
     )
   )
 
-  const title = intent.entities.date?.value === 'tomorrow'
-    ? `🔎 Tomorrow's reminders`
-    : intent.entities.date?.value === 'today'
-      ? `🔎 Today's reminders`
-      : '🔎 Reminders'
+  const title = 'Reminders'
 
   const visibleSummaries = filteredManualReminders
     .slice(0, PAGE_SIZE)

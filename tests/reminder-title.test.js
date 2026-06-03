@@ -6,7 +6,7 @@ process.env.SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'test-key'
 const { detectIntent, INTENTS } = require('../src/services/intentService')
 const { extractReminderTitle } = require('../src/services/reminderService')
 
-assert.equal(detectIntent('Delete Spotify').intent, INTENTS.SUBSCRIPTION_DELETE)
+assert.equal(detectIntent('delete sleep').intent, INTENTS.DELETE_ENTITY)
 assert.equal(detectIntent('Delete Spotify').entities.serviceName, 'Spotify')
 
 assert.equal(

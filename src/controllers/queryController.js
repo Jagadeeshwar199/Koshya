@@ -1,8 +1,18 @@
 const {
   resolveSubscriptionDelete,
+  archiveSubscription,
   getUserSubscriptions,
   updateSubscription
 } = require('../services/subscriptionService')
+const {
+  extractDeleteEntity,
+  resolveUnifiedDelete,
+  executeUnifiedDelete
+} = require('../services/deleteResolverService')
+const {
+  formatReminderCancelConfirmation
+} = require('../formatters/reminderFormatter')
+const { unpackReminderMessage } = require('../services/reminderService')
 const { matchSubscriptionsByService } = require('../utils/serviceMatcher')
 const { computeNextRenewalDate } = require('../services/reminderService')
 const { sendWhatsAppMessage } = require('../services/whatsappService')
@@ -10,7 +20,8 @@ const { setState } = require('../services/conversationStateService')
 const {
   formatSubscription,
   formatSubscriptionOption,
-  formatSubscriptionUpdated
+  formatSubscriptionUpdated,
+  formatSubscriptionRemoved
 } = require('../formatters/subscriptionFormatter')
 const { HELP_TEXT, WELCOME_TEXT, clarifyLowConfidence, unknownReply } = require('../utils/uxMessages')
 const { PAGE_SIZE } = require('./paginationController')
@@ -131,6 +142,58 @@ async function handleSubscriptionUpdateIntent(sender, intent) {
   return { ok: true, intent: intent.intent, subscription: updated, replySent: reply.success }
 }
 
+function formatDeleteChoice(candidate) {
+  if (candidate.type === 'reminder') {
+    const { title } = unpackReminderMessage(candidate.item.message)
+    const label = title.charAt(0).toUpperCase() + title.slice(1)
+    return `• ${label} reminder`
+  }
+  return `• ${candidate.item.serviceName} membership`
+}
+
+async function handleDeleteEntityIntent(sender, intent) {
+  const entityName =
+    intent.entities.serviceName || extractDeleteEntity(intent.rawText)
+
+  const result = await resolveUnifiedDelete({
+    userPhone: sender,
+    entityName
+  })
+
+  if (result.status === 'needs_name') {
+    const reply = await sendWhatsAppMessage(
+      sender,
+      `Delete what?\n\nTry:\ndelete Netflix\ndelete sleep`
+    )
+    return { ok: true, intent: intent.intent, replySent: reply.success }
+  }
+
+  if (result.status === 'not_found') {
+    const reply = await sendWhatsAppMessage(
+      sender,
+      `No match found.\n\nTry:\ndelete Netflix\ndelete sleep reminder`
+    )
+    return { ok: true, intent: intent.intent, replySent: reply.success }
+  }
+
+  if (result.status === 'multiple') {
+    const options = result.candidates.map(formatDeleteChoice).join('\n')
+    const reply = await sendWhatsAppMessage(
+      sender,
+      `I found multiple matches:\n\n${options}\n\nWhich one?`
+    )
+    return { ok: true, intent: intent.intent, replySent: reply.success }
+  }
+
+  const executed = await executeUnifiedDelete(result)
+  const text =
+    executed.type === 'reminder'
+      ? formatReminderCancelConfirmation(executed.reminder)
+      : formatSubscriptionRemoved(executed.subscription)
+  const reply = await sendWhatsAppMessage(sender, text)
+  return { ok: true, intent: intent.intent, replySent: reply.success }
+}
+
 async function handleSubscriptionDeleteIntent(sender, intent) {
   const result = await resolveSubscriptionDelete({
     userPhone: sender,
@@ -140,7 +203,7 @@ async function handleSubscriptionDeleteIntent(sender, intent) {
   if (result.status === 'needs_service_name') {
     const reply = await sendWhatsAppMessage(
       sender,
-      `Which subscription should I remove?\n\nTry:\nremove Netflix subscription`
+      `Which subscription?\n\nTry:\nremove Netflix`
     )
 
     return {
@@ -154,7 +217,7 @@ async function handleSubscriptionDeleteIntent(sender, intent) {
   if (result.status === 'not_found') {
     const reply = await sendWhatsAppMessage(
       sender,
-      `I couldn't find that subscription.`
+      `No subscription found.`
     )
 
     return {
@@ -171,7 +234,7 @@ async function handleSubscriptionDeleteIntent(sender, intent) {
       .join('\n')
     const reply = await sendWhatsAppMessage(
       sender,
-      `Which subscription should I remove?\n\n${options}\n\nReply with the subscription name.`
+      `Which subscription?\n\n${options}`
     )
 
     return {
@@ -182,26 +245,16 @@ async function handleSubscriptionDeleteIntent(sender, intent) {
     }
   }
 
-  await setState(sender, {
-    action: 'confirm_delete',
-    subscriptionId: result.subscription.id,
-    serviceName: result.subscription.serviceName
-  })
-
+  const subscription = await archiveSubscription(result.subscription.id)
   const reply = await sendWhatsAppMessage(
     sender,
-    `Remove ${result.subscription.serviceName}?
-
-Reply:
-YES to confirm
-NO to cancel`
+    formatSubscriptionRemoved(subscription)
   )
 
   return {
     ok: true,
     intent: intent.intent,
-    subscription: result.subscription,
-    awaitingConfirmation: true,
+    subscription,
     replySent: reply.success
   }
 }
@@ -224,6 +277,7 @@ async function handleClarifyIntent(sender, intent) {
 }
 
 module.exports = {
+  handleDeleteEntityIntent,
   handleSubscriptionDeleteIntent,
   handleSubscriptionQueryIntent,
   handleSubscriptionUpdateIntent,
