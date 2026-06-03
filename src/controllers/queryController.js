@@ -54,6 +54,20 @@ async function handleSubscriptionQueryIntent(sender, intent) {
     return { ok: true, intent: intent.intent, subscriptions: filtered, replySent: reply.success }
   }
 
+  if (intent.entities.queryType === 'expiry') {
+    const filtered = subscriptions.filter((sub) => {
+      const name = intent.entities.serviceName
+      return name
+        ? sub.serviceName.toLowerCase().includes(name.toLowerCase())
+        : true
+    })
+    const body = filtered.length
+      ? filtered.map((sub) => formatSubscription(sub)).join('\n')
+      : 'No matching subscriptions.'
+    const reply = await sendWhatsAppMessage(sender, `Expiring soon\n\n${body}`)
+    return { ok: true, intent: intent.intent, subscriptions: filtered, replySent: reply.success }
+  }
+
   if (intent.entities.queryType === 'renews_month') {
     const now = new Date()
     const month = now.getMonth()

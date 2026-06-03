@@ -3,6 +3,15 @@ function applyTypoFixes(text) {
     .replace(/\brenewls\b|\brenewes\b|\brenws\b|\brnews\b/gi, 'renews')
     .replace(/\bsubscritpion\b|\bsubscriuption\b/gi, 'subscription')
     .replace(/\bremiander\b/gi, 'reminder')
+    .replace(/\bremindars?\b/gi, 'remind')
+    .replace(/\bremnders?\b/gi, 'remind')
+    .replace(/\bsuscription\b/gi, 'subscription')
+    .replace(/\bsubscripton\b/gi, 'subscription')
+    .replace(/\brem1nd\b/gi, 'remind')
+    .replace(/\brem!nd\b/gi, 'remind')
+    .replace(/\br3mind\b/gi, 'remind')
+    .replace(/\b0n\b/gi, 'on')
+    .replace(/\bnetfl!x\b/gi, 'netflix')
     .replace(/\btomorw\b|\btmrw\b/gi, 'tomorrow')
 }
 

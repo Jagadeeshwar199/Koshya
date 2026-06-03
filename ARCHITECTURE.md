@@ -6,13 +6,21 @@
 | Entry | `server.js` |
 | Webhook | `webhookRoutes` → `webhookController` |
 | Router | `messageRouterService` |
-| Intents | `intentService` |
+| Intents | `intentService` → `src/intent/*` (semantic + fuzzy + entities + confidence) |
 | Parse | `parserCore`, `parserService` |
 | Subscriptions | `subscriptionFlowService`, `subscriptionService`, `pendingSubscriptionService` |
 | Reminders | `reminderController`, `reminderService`, `reminderJobService`, `reminderWorker` |
 | WhatsApp | `whatsappService`, `webhookMessage` |
 | Format | `subscriptionFormatter`, `reminderFormatter`, `uxMessages` |
 | API | `subscriptionRoutes`, `reminderRoutes`, `parseRoutes` |
+
+## Intent detection (`src/intent/`)
+- `semanticDictionaries.js` — reminder/subscription/expiry/payment/action/query/delete/update term groups
+- `fuzzyMatcher.js` — Levenshtein similarity, `groupScore` (env `INTENT_FUZZY_THRESHOLD`, default 0.34)
+- `entityExtractor.js` — service, date/time, amount, recurrence, actionText
+- `serviceCatalog.js` — seed + dynamic `registerService`
+- `intentDetector.js` — multi-signal scoring, `pickBestIntent` (env `INTENT_MIN_CONFIDENCE`, default 0.45)
+- `SUBSCRIPTION_EXPIRY` maps to `SUBSCRIPTION_QUERY` + `queryType: 'expiry'` for backward-compatible routing
 
 ## Router order (`messageRouterService`)
 1. `conversation_state` (delete confirm, reminder time follow-ups)

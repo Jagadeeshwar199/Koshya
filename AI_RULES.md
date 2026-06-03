@@ -5,6 +5,13 @@
 - Natural-language in, structured actions out; confirm with clear UX copy.
 - One user = one phone number (`user_phone`).
 
+## Intent detection (intent-first)
+- Classify via `src/intent/` semantic groups + entities + confidence — **not** exact phrase lists.
+- Implicit reminders: action + future schedule without reminder keywords (e.g. "buy milk tonight").
+- Subscription expiry NL: "Netflix ends tomorrow" → expiry query (`SUBSCRIPTION_QUERY`, `queryType: 'expiry'`).
+- Env: `INTENT_FUZZY_THRESHOLD` (default 0.34), `INTENT_MIN_CONFIDENCE` (default 0.45).
+- Tests: `intent.test.js` (legacy), `intent-semantic.test.js` (215+ cases).
+
 ## Reminders
 - `remind me …` → **create**, not reschedule (unless explicit update/cancel intent).
 - Missing time → `awaiting_reminder_create_time` or `awaiting_reminder_time` in `conversation_state`.

@@ -10,6 +10,7 @@
     "test": "node tests/run-all.js",
     "test:api": "node tests/api.test.js",
     "test:intents": "node tests/intent.test.js",
+    "test:intent-semantic": "node tests/intent-semantic.test.js",
     "test:intent-router": "node tests/intent-router.test.js",
     "test:reminder-confirmation": "node tests/reminder-confirmation.test.js",
     "test:reminder-query": "node tests/reminder-query.test.js",
