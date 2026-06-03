@@ -65,7 +65,9 @@ WhatsApp → POST /webhook → intent router → handlers → Supabase
 Cron worker → generate reminders → deliver via WhatsApp
 ```
 
-See [`docs/mvp-flow.md`](docs/mvp-flow.md) for detailed flow documentation.
+**Project knowledge (AI / contributors):** [AGENTS.md](AGENTS.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [AI_RULES.md](AI_RULES.md) · [BUG_HISTORY.md](BUG_HISTORY.md) · [TESTING_RULES.md](TESTING_RULES.md) · [CURSOR_WORKFLOW.md](CURSOR_WORKFLOW.md)
+
+See [`docs/mvp-flow.md`](docs/mvp-flow.md) for MVP flow notes.
 
 ## Testing
 
