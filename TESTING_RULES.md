@@ -21,6 +21,7 @@ npm run test:subscription-pending
 ## Before merge
 - `npm test` → all suites pass.
 - Add suite to `tests/run-all.js` and `package.json` scripts if new file.
+- Doc pass: `BUG_HISTORY.md` (+ rules/architecture/testing) in same commit as the fix.
 
 ## Known gaps (add tests when touching area)
 - Subscription upsert on 409 — service layer, no dedicated test.

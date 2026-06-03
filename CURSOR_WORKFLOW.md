@@ -11,9 +11,11 @@
 3. Add or update tests per `TESTING_RULES.md`.
 4. Run `npm test`.
 
-## After change
-- Update `BUG_HISTORY.md` row if user-reported bug fixed.
-- Update `AI_RULES.md` / `ARCHITECTURE.md` only if behavior or structure changed.
+## Mandatory final step (every task, same commit as code)
+1. Review what changed (bug fix, rule, architecture, tests).
+2. Update if needed: `BUG_HISTORY.md`, `AI_RULES.md`, `ARCHITECTURE.md`, `TESTING_RULES.md`.
+3. Minimal edits only; no speculative content.
+4. If nothing new: note in commit or skip doc diff.
 
 ## Deploy
 ```bash

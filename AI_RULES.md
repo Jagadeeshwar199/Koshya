@@ -47,5 +47,6 @@
 - **Minimal diffs**; no unrelated refactors.
 - Read `AI_RULES.md`, `ARCHITECTURE.md`, `BUG_HISTORY.md` before changes.
 - Every bug fix → test in `tests/`.
+- **Before finish:** update knowledge docs in the **same commit** (see `CURSOR_WORKFLOW.md` final step).
 - Deploy: push `main` → GitHub Action → Railway.
 - Env: Supabase, Gupshup/WhatsApp, `SUPABASE_*`, webhook secrets.

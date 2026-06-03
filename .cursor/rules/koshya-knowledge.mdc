@@ -8,3 +8,4 @@ Before editing subscription/reminder/parser/router code:
 1. Read `AI_RULES.md`, `ARCHITECTURE.md`, `BUG_HISTORY.md`
 2. Follow `CURSOR_WORKFLOW.md` and `TESTING_RULES.md`
 3. Minimal changes only; add regression tests for bug fixes
+4. Same commit: run CURSOR_WORKFLOW mandatory final step (update knowledge docs)
