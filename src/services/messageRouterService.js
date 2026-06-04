@@ -30,11 +30,18 @@ const logger = require('../../utils/logger')
 const {
   isAdminPhone,
   parseAdminCommand,
-  handleParserAdminCommand,
-  logIncomingMessage
+  handleParserAdminCommand
 } = require('./parserTelemetryService')
+const intentPipeline = require('./intentPipelineService')
 
-async function routeDetectedIntent(sender, text, intent, options = {}) {
+async function routeDetectedIntent(sender, text, intent, options = {}, meta = {}) {
+  if (meta.validationFailed) {
+    if (meta.validationError === 'missing_reminder_subject') {
+      return handleReminderCreateIntent(sender, text, intent)
+    }
+    return handleClarifyIntent(sender, intent)
+  }
+
   if (intent.entities.clarify === 'short') {
     return handleUnknownIntent(sender, intent, text)
   }
@@ -53,8 +60,7 @@ async function routeDetectedIntent(sender, text, intent, options = {}) {
   }
 
   if (intent.intent === INTENTS.CONFIRM && !options.skipConfirmAck) {
-    const reply = await sendWhatsAppMessage(sender, '👍')
-    return { ok: true, intent: intent.intent, replySent: reply.success }
+    return { ok: true, intent: intent.intent, replySent: (await sendWhatsAppMessage(sender, '👍')).success }
   }
 
   if (intent.intent === INTENTS.LIST_MORE) {
@@ -118,42 +124,46 @@ async function routeWhatsAppMessage(sender, text, options = {}) {
   if (adminCmd && isAdminPhone(sender)) {
     return handleParserAdminCommand(sender, adminCmd)
   }
-  return logIncomingMessage(sender, text, () => routeWhatsAppMessageCore(sender, text, options))
+  return intentPipeline.runPipeline(sender, text, (ctx) => routeWhatsAppMessageCore(sender, text, options, ctx))
 }
 
-async function routeWhatsAppMessageCore(sender, text, options = {}) {
+async function routeWhatsAppMessageCore(sender, text, options = {}, ctx = null) {
   const pendingState = await getState(sender)
 
   if (pendingState?.action === 'confirm_delete') {
-    const intent = detectIntent(text)
+    const intent = ctx ? await intentPipeline.stageDetect(ctx, text) : detectIntent(text)
     if (intent.intent === INTENTS.CONFIRM) {
-      return handleDeleteConfirm(sender, pendingState)
+      return intentPipeline.stageExecute(ctx, 'delete_confirm', () => handleDeleteConfirm(sender, pendingState))
     }
     if (intent.intent === INTENTS.CANCEL) {
-      return handleDeleteCancel(sender)
+      return intentPipeline.stageExecute(ctx, 'delete_cancel', () => handleDeleteCancel(sender))
     }
   }
 
   if (pendingState?.action === 'awaiting_reminder_time') {
-    const intent = detectIntent(text)
+    const intent = ctx ? await intentPipeline.stageDetect(ctx, text) : detectIntent(text)
     if (intent.entities.date) {
-      return handleReminderTimeFollowUp(sender, intent.entities.date)
+      return intentPipeline.stageExecute(ctx, 'reminder_time_followup', () =>
+        handleReminderTimeFollowUp(sender, intent.entities.date)
+      )
     }
     await clearState(sender)
   }
 
   if (pendingState?.action === 'awaiting_reminder_create_time' && pendingState.draftMessage) {
-    const intent = detectIntent(text)
+    const intent = ctx ? await intentPipeline.stageDetect(ctx, text) : detectIntent(text)
     const isFreshReminder =
       /\bremind\s+me\b/i.test(text) && intent.entities.date?.kind === 'offset'
     if (isFreshReminder) {
       await clearState(sender)
     } else if (intent.entities.date || pendingState.draftEntities) {
-      return handleReminderCreateTimeFollowUp(
-        sender,
-        pendingState.draftMessage,
-        text,
-        pendingState.draftEntities
+      return intentPipeline.stageExecute(ctx, 'reminder_create_time', () =>
+        handleReminderCreateTimeFollowUp(
+          sender,
+          pendingState.draftMessage,
+          text,
+          pendingState.draftEntities
+        )
       )
     } else {
       await clearState(sender)
@@ -165,9 +175,18 @@ async function routeWhatsAppMessageCore(sender, text, options = {}) {
     logger.info('intent.multi', { userPhone: sender, count: clauses.length })
     let last
     for (const clause of clauses) {
-      last = await routeDetectedIntent(sender, clause.rawText || text, clause, options)
+      const run = (intent, meta) => routeDetectedIntent(sender, clause.rawText || text, intent, options, meta)
+      last = ctx
+        ? await intentPipeline.processClause(ctx, clause.rawText || text, run)
+        : await run(detectIntent(clause.rawText || text), {})
     }
     return { ok: true, intent: 'MULTI', clauses: clauses.length, last }
+  }
+
+  if (ctx) {
+    return intentPipeline.processClause(ctx, text, (intent, meta) =>
+      routeDetectedIntent(sender, text, intent, options, meta)
+    )
   }
 
   const intent = detectIntent(text)
@@ -177,7 +196,6 @@ async function routeWhatsAppMessageCore(sender, text, options = {}) {
     confidence: intent.confidence,
     entities: intent.entities
   })
-
   return routeDetectedIntent(sender, text, intent, options)
 }
 

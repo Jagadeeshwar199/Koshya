@@ -14,6 +14,7 @@
     "test:user-intent-examples": "node tests/user-intent-examples.test.js",
     "test:parser-validation": "node tests/parser-validation.js",
     "test:parser-telemetry": "node tests/parser-telemetry.test.js",
+    "test:intent-pipeline": "node tests/intent-pipeline.test.js",
     "test:production-routing": "node tests/production-routing.test.js",
     "test:intent-router": "node tests/intent-router.test.js",
     "test:reminder-confirmation": "node tests/reminder-confirmation.test.js",

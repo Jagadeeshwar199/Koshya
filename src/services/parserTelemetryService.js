@@ -191,51 +191,56 @@ function formatLines(title, rows, formatter) {
 }
 
 async function adminStatsReply() {
-  const events = await queryRows(() => supabase.from('parser_events').select('success'))
-  const total = events.length
-  const failed = events.filter((e) => !e.success).length
-  const topFailures = await queryRows(() =>
-    supabase.from('parser_events').select('failure_reason').eq('success', false).not('failure_reason', 'is', null)
+  const messages = await queryRows(() => supabase.from('message_logs').select('id'))
+  const execs = await queryRows(() => supabase.from('execution_logs').select('success'))
+  const detectFails = await queryRows(() =>
+    supabase.from('detection_logs').select('failure_reason').eq('success', false)
   )
+  const total = messages.length
+  const failed = execs.filter((e) => !e.success).length
   const failCounts = {}
-  for (const row of topFailures) {
-    const key = row.failure_reason.split('->')[0]
+  for (const row of detectFails) {
+    const key = row.failure_reason || 'detect_fail'
     failCounts[key] = (failCounts[key] || 0) + 1
   }
-  const topFailedMsgs = await queryRows(() =>
-    supabase.from('parser_events').select('raw_message').eq('success', false).limit(500)
+  const failExec = await queryRows(() =>
+    supabase.from('execution_logs').select('message_id').eq('success', false).limit(500)
   )
+  const failIds = [...new Set(failExec.map((r) => r.message_id))]
+  const failedMsgs =
+    failIds.length > 0
+      ? await queryRows(() => supabase.from('message_logs').select('raw_message').in('id', failIds))
+      : []
   const msgCounts = {}
-  for (const row of topFailedMsgs) msgCounts[row.raw_message] = (msgCounts[row.raw_message] || 0) + 1
-  const topServices = await queryRows(() =>
-    supabase.from('parser_events').select('extracted_entities').in('selected_route', ['unknown', 'clarify']).limit(500)
+  for (const row of failedMsgs) msgCounts[row.raw_message] = (msgCounts[row.raw_message] || 0) + 1
+  const unknowns = await queryRows(() =>
+    supabase.from('detection_logs').select('extracted_entities').eq('detected_intent', 'UNKNOWN').limit(500)
   )
   const svcCounts = {}
-  for (const row of topServices) {
-    const s = row.extracted_entities?.service
+  for (const row of unknowns) {
+    const s = row.extracted_entities?.service || row.extracted_entities?.serviceName
     if (s) svcCounts[s] = (svcCounts[s] || 0) + 1
   }
-
   const rate = total ? Math.round(((total - failed) / total) * 100) : 0
   return [
-    `📊 Parser Stats`,
-    `Total: ${total}`,
-    `Success: ${rate}%`,
-    `Failure: ${total ? 100 - rate : 0}%`,
+    '📊 Pipeline Stats',
+    `Messages: ${total}`,
+    `Exec success: ${rate}%`,
+    `Exec failure: ${total ? 100 - rate : 0}%`,
     '',
     formatLines('Top Failures', Object.entries(failCounts).sort((a, b) => b[1] - a[1]).slice(0, 5), ([k, v]) => `• ${k}: ${v}`),
     '',
     formatLines('Top Failed Inputs', Object.entries(msgCounts).sort((a, b) => b[1] - a[1]).slice(0, 5), ([k, v]) => `• ${k} (${v})`),
     '',
-    formatLines('Top Unknown Services', Object.entries(svcCounts).sort((a, b) => b[1] - a[1]).slice(0, 5), ([k, v]) => `• ${k}: ${v}`)
+    formatLines('Unknown Services', Object.entries(svcCounts).sort((a, b) => b[1] - a[1]).slice(0, 5), ([k, v]) => `• ${k}: ${v}`)
   ].join('\n')
 }
 
 async function adminFailuresReply() {
   const rows = await queryRows(() =>
     supabase
-      .from('parser_events')
-      .select('created_at, raw_message, failure_reason, selected_route')
+      .from('execution_logs')
+      .select('created_at, error_message, action_type, message_logs(raw_message)')
       .eq('success', false)
       .order('created_at', { ascending: false })
       .limit(50)
@@ -243,16 +248,17 @@ async function adminFailuresReply() {
   return formatLines(
     '🚨 Last 50 Failures',
     rows,
-    (r) => `• ${r.raw_message.slice(0, 60)}\n  ${r.failure_reason || 'unknown'} (${r.selected_route || '-'})`
+    (r) =>
+      `• ${(r.message_logs?.raw_message || '').slice(0, 60)}\n  ${r.error_message || r.action_type || 'unknown'}`
   )
 }
 
 async function adminRoutesReply() {
-  const rows = await queryRows(() => supabase.from('parser_events').select('selected_route').limit(5000))
+  const rows = await queryRows(() => supabase.from('execution_logs').select('action_type').limit(5000))
   const counts = {}
-  for (const row of rows) counts[row.selected_route || 'null'] = (counts[row.selected_route || 'null'] || 0) + 1
+  for (const row of rows) counts[row.action_type || 'null'] = (counts[row.action_type || 'null'] || 0) + 1
   return formatLines(
-    '🛣 Route Distribution',
+    '🛣 Action Distribution',
     Object.entries(counts).sort((a, b) => b[1] - a[1]),
     ([k, v]) => `• ${k}: ${v}`
   )
@@ -260,13 +266,15 @@ async function adminRoutesReply() {
 
 async function adminLowConfidenceReply() {
   const rows = await queryRows(() =>
-    supabase.from('parser_events').select('normalized_message, confidence_scores').limit(5000)
+    supabase
+      .from('detection_logs')
+      .select('confidence, message_logs(normalized_message)')
+      .lt('confidence', MIN_CONFIDENCE)
+      .limit(5000)
   )
   const counts = {}
   for (const row of rows) {
-    const max = Math.max(...Object.values(row.confidence_scores || {}).map(Number), 0)
-    if (max >= THRESHOLD_PCT) continue
-    const key = row.normalized_message
+    const key = row.message_logs?.normalized_message || '?'
     counts[key] = (counts[key] || 0) + 1
   }
   return formatLines(
@@ -288,41 +296,10 @@ async function handleParserAdminCommand(sender, command) {
   return { ok: true, intent: 'ADMIN', adminCommand: command }
 }
 
+const intentPipeline = require('./intentPipelineService')
+
 async function logIncomingMessage(userId, rawMessage, routeFn) {
-  const responses = []
-  if (setOutboundCapture) setOutboundCapture((text) => responses.push(text))
-  const clauses = detectClauseIntents(rawMessage)
-  const snapshot = buildSnapshot(rawMessage, clauses.length > 1 ? clauses : [detectIntent(rawMessage)])
-  let result
-  try {
-    result = await routeFn()
-  } catch (err) {
-    result = { ok: false, error: err.message, intent: 'ERROR' }
-    throw err
-  } finally {
-    clearOutboundCapture?.()
-    const selectedRoute = routeName(result?.intent || snapshot.primaryIntent, snapshot.clauses[0]?.entities)
-    const outcome = assessOutcome({
-      clauses: snapshot.clauses,
-      primaryIntent: snapshot.primaryIntent,
-      selectedRoute,
-      result,
-      responses
-    })
-    trackParserEvent({
-      user_id: userId,
-      raw_message: snapshot.raw_message,
-      normalized_message: snapshot.normalized_message,
-      detected_intents: snapshot.detected_intents,
-      confidence_scores: snapshot.confidence_scores,
-      extracted_entities: snapshot.extracted_entities,
-      selected_route: selectedRoute,
-      action_taken: actionName(selectedRoute),
-      response_sent: responses.join('\n') || null,
-      ...outcome
-    }).catch(() => {})
-  }
-  return result
+  return intentPipeline.runPipeline(userId, rawMessage, routeFn)
 }
 
 module.exports = {
