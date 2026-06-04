@@ -10,6 +10,7 @@ const tests = [
   'test:intent-router',
   'tests/shadow-detection.test.js',
   'tests/detection-engine.test.js',
+  'tests/weak-intent-guard.test.js',
   'test:reminders',
   'test:reminder-title',
   'test:reminder-schedule',

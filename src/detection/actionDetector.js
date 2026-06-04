@@ -7,6 +7,9 @@ const { Action } = require('./types')
 function detectAction(lower, domain, entities = {}) {
   const reasons = []
 
+  if (/^(?:hi|hello|hey|thanks|thank\s+you|how\s+are\s+you|good\s+(?:morning|evening))$/i.test(lower.trim())) {
+    return { action: Action.HELP, score: 0.95, reasons: ['greeting'] }
+  }
   if (/^change\s+to\b/i.test(lower.trim()) || /^make\s+it\b/i.test(lower.trim())) {
     return { action: Action.UPDATE, score: 0.92, reasons: ['reschedule_phrase'] }
   }

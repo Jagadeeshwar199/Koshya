@@ -5,7 +5,9 @@ const { Domain, Action, Decision } = require('./types')
 const {
   MIN_DOMAIN_SCORE,
   MIN_ACTION_SCORE,
-  AI_FALLBACK_THRESHOLD
+  AI_FALLBACK_THRESHOLD,
+  MIN_INTENT_SCORE,
+  isChitchatMessage
 } = require('../config/constants')
 const { buildClarification } = require('./clarification')
 
@@ -39,6 +41,22 @@ function planExecution(domain, action, entities, lower, scores) {
   const domainScore = scores.domainScore
   const actionScore = scores.actionScore
   const combined = scores.combined
+  const scorePct = Math.round(combined * 100)
+  const winner = `${domain}:${action}`
+
+  if (isChitchatMessage(lower)) {
+    return { decision: Decision.EXECUTE, missingFields: [], clarification: null, reasons: [...reasons, 'chitchat_help'], winner, score: scorePct }
+  }
+  if (scorePct < MIN_INTENT_SCORE) {
+    return {
+      decision: Decision.AI_FALLBACK,
+      missingFields: [],
+      clarification: null,
+      reasons: [...reasons, `weak_intent_score:${scorePct}`],
+      winner,
+      score: scorePct
+    }
+  }
 
   if (domain !== Domain.UNKNOWN && action === Action.UNKNOWN) {
     return {
@@ -64,15 +82,28 @@ function planExecution(domain, action, entities, lower, scores) {
 
   const missingFields = missingFor(domain, action, entities, lower)
   if (missingFields.length) {
+    const isWorkflow = domain === Domain.REMINDER || domain === Domain.SUBSCRIPTION
+    if (isWorkflow && scorePct < MIN_INTENT_SCORE) {
+      return {
+        decision: Decision.AI_FALLBACK,
+        missingFields: [],
+        clarification: null,
+        reasons: [...reasons, 'weak_no_clarify'],
+        winner,
+        score: scorePct
+      }
+    }
     return {
       decision: Decision.CLARIFY,
       missingFields,
       clarification: buildClarification(domain, action, entities, missingFields),
-      reasons: [...reasons, 'missing_entities']
+      reasons: [...reasons, 'missing_entities'],
+      winner,
+      score: scorePct
     }
   }
 
-  return { decision: Decision.EXECUTE, missingFields: [], clarification: null, reasons }
+  return { decision: Decision.EXECUTE, missingFields: [], clarification: null, reasons, winner, score: scorePct }
 }
 
 /** @deprecated use planExecution */

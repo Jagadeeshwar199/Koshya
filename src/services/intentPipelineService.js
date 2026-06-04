@@ -214,7 +214,7 @@ async function processClause(ctx, text, executeFn) {
   if (!useLegacyEngine()) {
     const intent = await stageDetect(ctx, text)
     const det = ctx.lastDetection
-    if (det?.decision === Decision.CLARIFY) {
+    if (det?.decision === Decision.CLARIFY && (det.scorePercent ?? 100) >= require('../config/constants').MIN_INTENT_SCORE) {
       const { handleDetectionClarify } = require('../controllers/queryController')
       return stageExecute(ctx, 'CLARIFY', () =>
         handleDetectionClarify(ctx.userId, det.intent, det.clarification)

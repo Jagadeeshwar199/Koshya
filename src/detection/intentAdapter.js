@@ -1,6 +1,7 @@
 /** Maps Domain+Action to legacy INTENTS for existing handlers (no new business logic). */
 const { INTENTS } = require('../services/intentService')
 const { Domain, Action } = require('./types')
+const { isChitchatMessage } = require('../config/constants')
 
 function toLegacyIntent(det) {
   const { domain, action, entities, score, message } = det
@@ -20,7 +21,9 @@ function toLegacyIntent(det) {
     }
   }
 
-  if (domain === Domain.GENERAL && action === Action.HELP) intent = INTENTS.HELP
+  if ((domain === Domain.GENERAL && action === Action.HELP) || action === Action.HELP || isChitchatMessage(message)) {
+    intent = INTENTS.HELP
+  }
   else if (domain === Domain.GENERAL && action === Action.LIST) intent = INTENTS.LIST_MORE
   else if (domain === Domain.REMINDER && action === Action.CREATE) intent = INTENTS.REMINDER_CREATE
   else if (domain === Domain.REMINDER && action === Action.DELETE) intent = INTENTS.REMINDER_CANCEL

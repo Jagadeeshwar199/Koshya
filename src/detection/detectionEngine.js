@@ -11,8 +11,14 @@ const { Decision } = require('./types')
 const { inferWithAI } = require('./aiDomainParser')
 const { toLegacyIntent } = require('./intentAdapter')
 const analytics = require('../services/detectionAnalyticsService')
-const { isLegacyIntentEngineEnabled } = require('../config/constants')
+const {
+  isLegacyIntentEngineEnabled,
+  MIN_INTENT_SCORE,
+  isChitchatMessage
+} = require('../config/constants')
+const logger = require('../../utils/logger')
 const intentDetector = require('../intent/intentDetector')
+const { Domain, Action } = require('./types')
 
 function enrichEntities(message, entities, lower) {
   const out = { ...entities }
@@ -38,6 +44,9 @@ function runDetection(rawMessage) {
   })
   reasons.push(...plan.reasons)
 
+  const winner = plan.winner || `${d.domain}:${a.action}`
+  const scorePercent = plan.score ?? Math.round(combined * 100)
+
   return {
     message,
     domain: d.domain,
@@ -45,6 +54,8 @@ function runDetection(rawMessage) {
     domainScore: d.score,
     actionScore: a.score,
     score: combined,
+    winner,
+    scorePercent,
     entities,
     reasons,
     missingFields: plan.missingFields,
@@ -55,13 +66,40 @@ function runDetection(rawMessage) {
   }
 }
 
+function finalizeWeakDetection(det) {
+  logger.info('detection.winner', {
+    winner: det.winner,
+    score: det.scorePercent,
+    decision: det.decision,
+    message: det.message
+  })
+  if (det.scorePercent >= MIN_INTENT_SCORE) return det
+  if (isChitchatMessage(det.message)) {
+    det.domain = Domain.GENERAL
+    det.action = Action.HELP
+    det.decision = Decision.EXECUTE
+    det.clarification = null
+    det.winner = 'GENERAL:HELP'
+    det.scorePercent = 99
+    det.reasons.push('chitchat_routed_help')
+    return det
+  }
+  det.decision = Decision.AI_FALLBACK
+  det.clarification = null
+  det.reasons.push(`weak_score_guard:${det.scorePercent}`)
+  return det
+}
+
 async function applyAiFallback(ctx, det) {
   const ai = await inferWithAI({
     rawMessage: ctx?.rawMessage || det.message,
     normalized: ctx?.normalized || det.message,
     partial: { domain: det.domain, action: det.action, entities: det.entities }
   })
-  if (!ai.success) return { ...det, decision: Decision.CLARIFY, clarification: 'I could not understand that. Can you rephrase?' }
+  if (!ai.success) {
+    const weak = { ...det, decision: Decision.AI_FALLBACK, clarification: null, usedAI: true, aiMeta: ai }
+    return finalizeWeakDetection(weak)
+  }
 
   const lower = normalizeForIntentMatch(det.message)
   let entities = enrichEntities(det.message, { ...det.entities, ...ai.entities }, lower)
@@ -71,13 +109,15 @@ async function applyAiFallback(ctx, det) {
     actionScore: ai.confidence,
     combined
   })
-  const next = {
+  return {
     ...det,
     domain: ai.domain,
     action: ai.action,
     domainScore: ai.confidence,
     actionScore: ai.confidence,
     score: combined,
+    winner: plan.winner || `${ai.domain}:${ai.action}`,
+    scorePercent: plan.score ?? Math.round(combined * 100),
     entities,
     decision: plan.decision,
     clarification: plan.clarification,
@@ -85,7 +125,6 @@ async function applyAiFallback(ctx, det) {
     usedAI: true,
     aiMeta: ai
   }
-  return next
 }
 
 function detectionToIntent(det) {
@@ -119,17 +158,14 @@ async function detectAndPlan(rawMessage, ctx = null) {
     return det
   }
 
-  let det = runDetection(rawMessage)
+  let det = finalizeWeakDetection(runDetection(rawMessage))
   if (det.decision === Decision.AI_FALLBACK) {
     analytics.recordAiFallback(det.message)
-    det = await applyAiFallback(ctx, det)
-    if (det.decision === Decision.AI_FALLBACK) {
-      analytics.recordClarification(det.message)
-      det.decision = Decision.CLARIFY
-      det.clarification = det.clarification || 'What would you like me to do?'
-    }
+    det = finalizeWeakDetection(await applyAiFallback(ctx, det))
   }
-  if (det.decision === Decision.CLARIFY) analytics.recordClarification(det.message)
+  if (det.decision === Decision.CLARIFY && det.scorePercent >= MIN_INTENT_SCORE) {
+    analytics.recordClarification(det.message)
+  }
   if (det.decision === Decision.EXECUTE) analytics.recordExecution()
 
   det.intent = detectionToIntent(det)
