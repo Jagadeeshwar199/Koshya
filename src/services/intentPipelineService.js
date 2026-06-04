@@ -189,9 +189,11 @@ async function runPipeline(userId, rawMessage, routeFn) {
   const ctx = createContext(userId, rawMessage)
   const responses = []
   if (setOutboundCapture) setOutboundCapture((t) => responses.push(t))
+  let result
   try {
     await stageNormalize(ctx)
-    return await routeFn(ctx)
+    result = await routeFn(ctx)
+    return result
   } catch (err) {
     await pipelineLog.logSystemError(ctx.stage || 'pipeline', err, {
       userId,
@@ -200,6 +202,9 @@ async function runPipeline(userId, rawMessage, routeFn) {
     })
     throw err
   } finally {
+    try {
+      await require('./parserTelemetryService').updateParserEventOutcome(ctx, result, responses)
+    } catch (_) {}
     clearOutboundCapture?.()
   }
 }

@@ -166,6 +166,31 @@ async function trackParserEvent(payload) {
   return row
 }
 
+async function updateParserEventOutcome(ctx, result, responses) {
+  if (!ctx?.messageId) return
+  try {
+    const { data } = await supabase
+      .from('parser_events')
+      .select('id')
+      .eq('message_id', ctx.messageId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+    const id = data?.[0]?.id
+    if (!id) return
+    const route = routeName(result?.intent, result?.entities || {})
+    await supabase
+      .from('parser_events')
+      .update({
+        selected_route: route,
+        action_taken: actionName(route),
+        response_sent: responses.filter(Boolean).join('\n') || null
+      })
+      .eq('id', id)
+  } catch (err) {
+    logger.error('parser_events.update_exception', { error: err.message })
+  }
+}
+
 async function logParserDetection(payload) {
   try {
     const intent = payload.selected_intent
@@ -332,6 +357,7 @@ async function logIncomingMessage(userId, rawMessage, routeFn) {
 module.exports = {
   trackParserEvent,
   logParserDetection,
+  updateParserEventOutcome,
   buildSnapshot,
   assessOutcome,
   routeName,
