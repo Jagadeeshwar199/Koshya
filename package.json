@@ -37,6 +37,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@google/genai": "^2.8.0",
     "@supabase/supabase-js": "^2.105.4",
     "axios": "^1.16.1",
     "cors": "^2.8.6",
