@@ -10,10 +10,10 @@ require.cache[require.resolve('../config/supabase')] = {
     from: (table) => ({
       insert: (row) => ({
         select: () => ({
-          maybeSingle: async () => {
+          then: (resolve) => {
             const id = `${table}-${store[table].length + 1}`
             store[table].push({ id, ...row })
-            return { data: { id }, error: null }
+            return resolve({ data: [{ id }], error: null })
           }
         })
       }),

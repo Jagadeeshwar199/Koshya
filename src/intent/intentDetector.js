@@ -280,15 +280,24 @@ function scoreSignals(text, lower, entities, threshold) {
   if (/\b(?:today|tomorrow|tomorrows|upcoming)\b/.test(lower) && /\b(?:reminder|reminders)\b/.test(lower)) {
     scores[INTENTS.REMINDER_QUERY] = Math.max(scores[INTENTS.REMINDER_QUERY], 0.92)
   }
-  if (/\bwhat\s+(?:renews|is due)\s+tomorrow\b/.test(lower)) {
-    scores[INTENTS.REMINDER_QUERY] = Math.max(scores[INTENTS.REMINDER_QUERY], 0.9)
+  if (/\bwhat\s+renews?\s+tomorrow\b/i.test(lower)) {
+    scores[INTENTS.SUBSCRIPTION_QUERY] = Math.max(scores[INTENTS.SUBSCRIPTION_QUERY], 0.95)
+    scores[INTENTS.REMINDER_QUERY] = Math.min(scores[INTENTS.REMINDER_QUERY], 0.35)
+  }
+  if (/\bwhat\s+is\s+due\s+tomorrow\b/i.test(lower)) {
+    scores[INTENTS.REMINDER_QUERY] = 0.95
+    scores[INTENTS.REMINDER_CREATE] = 0.32
   }
 
   if (/\bhow many\b/.test(lower) && subscriptionSemantic > 0.3) {
     scores[INTENTS.SUBSCRIPTION_QUERY] = 0.95
   }
 
-  if (/\bexpir(?:ing|es?)\s+soon\b/i.test(lower) || /\bwhat\s+is\s+expir/i.test(lower)) {
+  if (
+    /\bshow\s+(?:expir(?:ing|es?)|ending)\b/i.test(lower) ||
+    /\bexpir(?:ing|es?)\s+soon\b/i.test(lower) ||
+    /\bwhat\s+is\s+expir/i.test(lower)
+  ) {
     scores[INTENTS.SUBSCRIPTION_QUERY] = 0.96
     scores[INTENTS.REMINDER_QUERY] = 0.3
     scores[INTENTS.SUBSCRIPTION_EXPIRY] = 0.32
@@ -490,20 +499,23 @@ function scoreSignals(text, lower, entities, threshold) {
     scores[INTENTS.SUBSCRIPTION_UPDATE] = 0.3
   }
 
-  if (/\bwhat\s+(?:renews|is due)\s+tomorrow\b/i.test(lower)) {
-    scores[INTENTS.REMINDER_QUERY] = 0.94
-    scores[INTENTS.REMINDER_CREATE] = 0.32
+  if (/\bwhat\s+renews?\s+tomorrow\b/i.test(lower)) {
+    scores[INTENTS.SUBSCRIPTION_QUERY] = 0.94
+    scores[INTENTS.REMINDER_QUERY] = 0.32
   }
 
   if (
     /\brenewal\b/i.test(lower) &&
     /\b(?:today|tomorrow)\b/i.test(lower) &&
+    !/\breminders?\b/i.test(lower) &&
     !/\b(?:update|change|amount|remind|need|passport|licen[cs]e)\b/i.test(lower) &&
-    !/\b(?:need|must)\b/i.test(lower)
+    !/\b(?:need|must)\b/i.test(lower) &&
+    (entities.serviceName || subscriptionSemantic > 0.2)
   ) {
-    scores[INTENTS.REMINDER_QUERY] = 0.94
+    scores[INTENTS.SUBSCRIPTION_QUERY] = 0.96
+    scores[INTENTS.SUBSCRIPTION_UPDATE] = 0.32
+    scores[INTENTS.REMINDER_QUERY] = 0.3
     scores[INTENTS.REMINDER_CREATE] = 0.3
-    scores[INTENTS.SUBSCRIPTION_UPDATE] = 0.3
   }
 
   const explicitDeleteVerb = /\b(?:delete|remove|cancel)\b/.test(lower)
@@ -798,11 +810,17 @@ function scoreSignals(text, lower, entities, threshold) {
     scores[INTENTS.SUBSCRIPTION_QUERY] = Math.min(scores[INTENTS.SUBSCRIPTION_QUERY], 0.41)
   }
 
+  if (/\bwhat\s+is\s+due\s+tomorrow\b/i.test(lower)) {
+    scores[INTENTS.REMINDER_QUERY] = 0.96
+    scores[INTENTS.REMINDER_CREATE] = 0.32
+  }
+
   if (
     /\brenewal\b/i.test(lower) &&
     /\b(?:today|tomorrow)\b/i.test(lower) &&
     entities.serviceName &&
-    !/\brenews?\b/i.test(lower)
+    !/\brenews?\b/i.test(lower) &&
+    reminderSemantic > subscriptionSemantic
   ) {
     scores[INTENTS.REMINDER_QUERY] = 0.96
     scores[INTENTS.SUBSCRIPTION_CREATE] = 0.32
@@ -852,7 +870,11 @@ function resolveQueryType(text, lower, intent) {
   if (/\bwhat\s+renews?\s+this\s+month\b/.test(lower)) {
     return { queryType: 'renews_month' }
   }
-  if (intent === INTENTS.SUBSCRIPTION_EXPIRY || /\bexpir(?:ing|es?)\s+soon\b/i.test(lower)) {
+  if (
+    intent === INTENTS.SUBSCRIPTION_EXPIRY ||
+    /\bexpir(?:ing|es?)\s+soon\b/i.test(lower) ||
+    /\bshow\s+expir/i.test(lower)
+  ) {
     return { queryType: 'expiry' }
   }
   return {}
@@ -868,7 +890,11 @@ function isExplicitQuery(lower) {
     (/\breminder\b/i.test(lower) &&
       /\b(?:show|list|what|which|my|existing)\b/i.test(lower) &&
       !/\b(?:change|update|delete|remove|cancel|reschedule)\b/i.test(lower)) ||
-    (/\bsubscriptions?\b/i.test(lower) && /\b(?:today|tomorrow|tomorrows)\b/i.test(lower))
+    (/\bsubscriptions?\b/i.test(lower) && /\b(?:today|tomorrow|tomorrows)\b/i.test(lower)) ||
+    (/\b(?:renewal|renews?)\b/i.test(lower) &&
+      /\b(?:today|tomorrow)\b/i.test(lower) &&
+      !/\breminders?\b/i.test(lower) &&
+      !/\b(?:update|change|set|edit|amount)\b/i.test(lower))
   )
 }
 
@@ -967,6 +993,13 @@ function detectIntent(message) {
 
   if (!text) {
     return buildResult(INTENTS.UNKNOWN, 0, text, {})
+  }
+
+  if (/^\s*\//.test(text)) {
+    if (/^\s*\/(?:help|start)\b/i.test(text)) {
+      return buildResult(INTENTS.HELP, 0.95, text, {})
+    }
+    return buildResult(INTENTS.UNKNOWN, 0.9, text, {})
   }
 
   const entities = extractEntities(text)

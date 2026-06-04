@@ -3,12 +3,17 @@ const logger = require('../../utils/logger')
 
 async function safeInsert(table, row) {
   try {
-    const { data, error } = await supabase.from(table).insert(row).select('id').maybeSingle()
+    const { data, error } = await supabase.from(table).insert(row).select('id')
     if (error) {
-      logger.error('pipeline_log.insert_failed', { table, error: error.message })
+      logger.error('pipeline_log.insert_failed', {
+        table,
+        error: error.message,
+        code: error.code,
+        hint: error.hint
+      })
       return null
     }
-    return data?.id || null
+    return data?.[0]?.id || null
   } catch (err) {
     logger.error('pipeline_log.insert_exception', { table, error: err.message })
     return null

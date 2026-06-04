@@ -6,6 +6,7 @@ process.env.SUPABASE_SERVICE_ROLE_KEY =
 
 let subscriptionCalls = 0
 let reminderQueryCalls = 0
+let subscriptionQueryCalls = 0
 let reminderCreateCalls = 0
 let reminderUpdateCalls = 0
 let reminderCancelCalls = 0
@@ -51,7 +52,10 @@ require.cache[require.resolve('../src/controllers/reminderController')] = {
 
 require.cache[require.resolve('../src/controllers/queryController')] = {
   exports: {
-    handleSubscriptionQueryIntent: async () => ({ ok: true, intent: 'SUBSCRIPTION_QUERY' }),
+    handleSubscriptionQueryIntent: async () => {
+      subscriptionQueryCalls++
+      return { ok: true, intent: 'SUBSCRIPTION_QUERY' }
+    },
     handleSubscriptionUpdateIntent: async () => ({ ok: true, intent: 'SUBSCRIPTION_UPDATE' }),
     handleSubscriptionDeleteIntent: async () => {
       subscriptionDeleteCalls++
@@ -69,8 +73,9 @@ async function run() {
   await routeWhatsAppMessage('919999999999', 'Tell me about an existing Netflix reminder')
   await routeWhatsAppMessage('919999999999', 'What renews tomorrow?')
 
-  assert.equal(subscriptionCalls, 0, 'reminder query messages must not call subscription parser flow')
-  assert.equal(reminderQueryCalls, 3, 'bug messages should route to reminder query')
+  assert.equal(subscriptionCalls, 0, 'subscription query messages must not call subscription parser flow')
+  assert.equal(subscriptionQueryCalls, 2, 'renewal schedule queries should route to subscription query')
+  assert.equal(reminderQueryCalls, 1, 'explicit reminder lookup should route to reminder query')
 
   await routeWhatsAppMessage('919999999999', 'Netflix renews on 27th every month - 149')
   assert.equal(subscriptionCalls, 1, 'subscription create should still call subscription parser flow')

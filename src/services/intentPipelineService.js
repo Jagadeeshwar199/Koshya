@@ -28,6 +28,14 @@ async function stageNormalize(ctx) {
   try {
     ctx.normalized = normalizeText(applyTypoFixes(ctx.rawMessage))
     ctx.messageId = await pipelineLog.logMessage(ctx.userId, ctx.rawMessage, ctx.normalized)
+    if (!ctx.messageId) {
+      await pipelineLog.logSystemError(
+        'logMessage',
+        new Error('message_logs_insert_failed'),
+        { userId: ctx.userId, rawMessage: ctx.rawMessage }
+      )
+      logger.error('pipeline.message_log_missing', { userId: ctx.userId })
+    }
     logger.info('pipeline.normalize', { userId: ctx.userId, messageId: ctx.messageId, ms: Date.now() - t0 })
     return ctx
   } catch (err) {
