@@ -44,6 +44,13 @@ async function stageNormalize(ctx) {
   }
 }
 
+function detectionLogFields(text) {
+  return {
+    raw_message: text,
+    normalized_message: normalizeText(applyTypoFixes(text))
+  }
+}
+
 async function stageDetect(ctx, text) {
   ctx.stage = 'detect'
   const t0 = Date.now()
@@ -52,6 +59,7 @@ async function stageDetect(ctx, text) {
     const ms = Date.now() - t0
     const ok = intent.intent !== 'UNKNOWN' && intent.confidence >= THRESHOLD
     await pipelineLog.logDetection(ctx.messageId, {
+      ...detectionLogFields(text),
       intent: intent.intent,
       confidence: intent.confidence,
       entities: intent.entities,
@@ -63,6 +71,7 @@ async function stageDetect(ctx, text) {
     return intent
   } catch (err) {
     await pipelineLog.logDetection(ctx.messageId, {
+      ...detectionLogFields(text),
       intent: 'ERROR',
       confidence: 0,
       entities: {},

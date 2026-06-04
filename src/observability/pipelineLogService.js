@@ -32,6 +32,8 @@ async function logDetection(messageId, payload) {
   if (!messageId) return null
   return safeInsert('detection_logs', {
     message_id: messageId,
+    raw_message: payload.raw_message ?? null,
+    normalized_message: payload.normalized_message ?? null,
     detected_intent: payload.intent,
     confidence: payload.confidence,
     extracted_entities: payload.entities || {},
