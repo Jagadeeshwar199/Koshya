@@ -307,6 +307,11 @@ async function handleHelpIntent(sender, intent) {
   return { ok: true, intent: intent.intent, replySent: reply.success }
 }
 
+async function handleDetectionClarify(sender, intent, clarificationText) {
+  const reply = await sendWhatsAppMessage(sender, clarificationText || 'Can you share a bit more detail?')
+  return { ok: true, intent: intent?.intent || 'CLARIFY', replySent: reply.success }
+}
+
 async function handleClarifyIntent(sender, intent) {
   const msg =
     intent.entities.clarify === 'short'
@@ -334,5 +339,6 @@ module.exports = {
   handleHelpIntent,
   handleUnknownIntent,
   handleClarifyIntent,
+  handleDetectionClarify,
   WELCOME_TEXT
 }

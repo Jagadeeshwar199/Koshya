@@ -86,11 +86,11 @@ async function logExecution(messageId, actionType, success, errorMessage, execut
   })
 }
 
-async function logShadowDetection(messageId, result, ms = 0) {
+async function logShadowDetection(messageId, result, ms = 0, pipeline = 'shadow') {
   if (!messageId || !result) return null
   return safeInsert('detection_logs', {
     message_id: messageId,
-    pipeline: 'shadow',
+    pipeline,
     message: result.message,
     raw_message: result.message,
     normalized_message: result.message,

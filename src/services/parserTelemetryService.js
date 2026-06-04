@@ -229,6 +229,7 @@ function parseAdminCommand(text) {
   if (cmd === 'parser failures') return 'failures'
   if (cmd === 'parser routes') return 'routes'
   if (cmd === 'parser low-confidence' || cmd === 'parser low confidence') return 'low_confidence'
+  if (cmd === 'detection stats' || cmd === 'parser detection stats') return 'detection_stats'
   return null
 }
 
@@ -342,7 +343,18 @@ async function handleParserAdminCommand(sender, command) {
     stats: adminStatsReply,
     failures: adminFailuresReply,
     routes: adminRoutesReply,
-    low_confidence: adminLowConfidenceReply
+    low_confidence: adminLowConfidenceReply,
+    detection_stats: async () => {
+      const a = require('./detectionAnalyticsService').getAnalytics()
+      return [
+        '📊 Detection analytics',
+        `execution: ${a.execution_count}`,
+        `clarification: ${a.clarification_count}`,
+        `ai_fallback: ${a.ai_fallback_count}`,
+        'top_failed:',
+        ...a.top_failed_messages.map((x) => `• ${x.message} (${x.count})`)
+      ].join('\n')
+    }
   }
   const body = await handlers[command]()
   await sendWhatsAppMessage(sender, body)

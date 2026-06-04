@@ -17,4 +17,10 @@ const Action = {
   UNKNOWN: 'UNKNOWN'
 }
 
-module.exports = { Domain, Action }
+const Decision = {
+  EXECUTE: 'EXECUTE',
+  CLARIFY: 'CLARIFY',
+  AI_FALLBACK: 'AI_FALLBACK'
+}
+
+module.exports = { Domain, Action, Decision }

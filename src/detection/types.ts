@@ -17,7 +17,14 @@ export enum Action {
   UNKNOWN = 'UNKNOWN'
 }
 
+export enum Decision {
+  EXECUTE = 'EXECUTE',
+  CLARIFY = 'CLARIFY',
+  AI_FALLBACK = 'AI_FALLBACK'
+}
+
 export interface DetectionResult {
+  decision?: Decision
   domain: Domain
   action: Action
   score: number

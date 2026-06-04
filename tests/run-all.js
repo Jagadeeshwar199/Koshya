@@ -8,6 +8,8 @@ const tests = [
   'test:intent-semantic',
   'test:user-intent-examples',
   'test:intent-router',
+  'tests/shadow-detection.test.js',
+  'tests/detection-engine.test.js',
   'test:reminders',
   'test:reminder-title',
   'test:reminder-schedule',
@@ -25,10 +27,9 @@ const tests = [
 ]
 
 for (const test of tests) {
-  const result = spawnSync('npm', ['run', test], {
-    stdio: 'inherit',
-    env: process.env
-  })
+  const result = test.endsWith('.js')
+    ? spawnSync('node', [test], { stdio: 'inherit', env: process.env })
+    : spawnSync('npm', ['run', test], { stdio: 'inherit', env: process.env })
 
   if (result.status !== 0) {
     process.exit(result.status || 1)

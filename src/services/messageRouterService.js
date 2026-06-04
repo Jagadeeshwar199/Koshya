@@ -33,8 +33,22 @@ const {
   handleParserAdminCommand
 } = require('./parserTelemetryService')
 const intentPipeline = require('./intentPipelineService')
+const { useLegacyEngine, splitClauses } = require('../detection/detectionEngine')
+const { detectAndPlan } = require('../detection/detectionEngine')
+async function resolveIntent(ctx, text) {
+  if (useLegacyEngine()) {
+    return ctx ? intentPipeline.stageDetect(ctx, text) : detectIntent(text)
+  }
+  const det = await detectAndPlan(text, ctx)
+  if (ctx) ctx.lastDetection = det
+  return det.intent
+}
 
 async function routeDetectedIntent(sender, text, intent, options = {}, meta = {}) {
+  if (meta.clarificationText) {
+    const { handleDetectionClarify } = require('../controllers/queryController')
+    return handleDetectionClarify(sender, intent, meta.clarificationText)
+  }
   if (meta.validationFailed) {
     if (meta.validationError === 'missing_reminder_subject') {
       return handleReminderCreateIntent(sender, text, intent)
@@ -131,7 +145,7 @@ async function routeWhatsAppMessageCore(sender, text, options = {}, ctx = null) 
   const pendingState = await getState(sender)
 
   if (pendingState?.action === 'confirm_delete') {
-    const intent = ctx ? await intentPipeline.stageDetect(ctx, text) : detectIntent(text)
+    const intent = await resolveIntent(ctx, text)
     if (intent.intent === INTENTS.CONFIRM) {
       return intentPipeline.stageExecute(ctx, 'delete_confirm', () => handleDeleteConfirm(sender, pendingState))
     }
@@ -141,7 +155,7 @@ async function routeWhatsAppMessageCore(sender, text, options = {}, ctx = null) 
   }
 
   if (pendingState?.action === 'awaiting_reminder_time') {
-    const intent = ctx ? await intentPipeline.stageDetect(ctx, text) : detectIntent(text)
+    const intent = await resolveIntent(ctx, text)
     if (intent.entities.date) {
       return intentPipeline.stageExecute(ctx, 'reminder_time_followup', () =>
         handleReminderTimeFollowUp(sender, intent.entities.date)
@@ -151,7 +165,7 @@ async function routeWhatsAppMessageCore(sender, text, options = {}, ctx = null) 
   }
 
   if (pendingState?.action === 'awaiting_reminder_create_time' && pendingState.draftMessage) {
-    const intent = ctx ? await intentPipeline.stageDetect(ctx, text) : detectIntent(text)
+    const intent = await resolveIntent(ctx, text)
     const isFreshReminder =
       /\bremind\s+me\b/i.test(text) && intent.entities.date?.kind === 'offset'
     if (isFreshReminder) {
@@ -170,7 +184,9 @@ async function routeWhatsAppMessageCore(sender, text, options = {}, ctx = null) 
     }
   }
 
-  const clauses = detectClauseIntents(text)
+  const clauses = useLegacyEngine()
+    ? detectClauseIntents(text)
+    : splitClauses(text).map((rawText) => ({ rawText, intent: null }))
   if (clauses.length > 1) {
     logger.info('intent.multi', { userPhone: sender, count: clauses.length })
     let last
@@ -178,7 +194,7 @@ async function routeWhatsAppMessageCore(sender, text, options = {}, ctx = null) 
       const run = (intent, meta) => routeDetectedIntent(sender, clause.rawText || text, intent, options, meta)
       last = ctx
         ? await intentPipeline.processClause(ctx, clause.rawText || text, run)
-        : await run(detectIntent(clause.rawText || text), {})
+        : await run(await resolveIntent(null, clause.rawText || text), {})
     }
     return { ok: true, intent: 'MULTI', clauses: clauses.length, last }
   }
@@ -189,7 +205,7 @@ async function routeWhatsAppMessageCore(sender, text, options = {}, ctx = null) 
     )
   }
 
-  const intent = detectIntent(text)
+  const intent = await resolveIntent(ctx, text)
   logger.info('intent.detected', {
     userPhone: sender,
     intent: intent.intent,

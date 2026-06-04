@@ -62,7 +62,9 @@ require.cache[require.resolve('../src/controllers/queryController')] = {
       return { ok: true, intent: 'SUBSCRIPTION_DELETE' }
     },
     handleHelpIntent: async () => ({ ok: true, intent: 'HELP' }),
-    handleUnknownIntent: async () => ({ ok: true, intent: 'UNKNOWN' })
+    handleUnknownIntent: async () => ({ ok: true, intent: 'UNKNOWN' }),
+    handleClarifyIntent: async () => ({ ok: true, intent: 'CLARIFY' }),
+    handleDetectionClarify: async () => ({ ok: true, intent: 'CLARIFY' })
   }
 }
 

@@ -1099,6 +1099,7 @@ function needsExplicitTimePrompt(entities = {}, text = '') {
 
 module.exports = {
   INTENTS,
+  clauseParts,
   detectIntent,
   detectClauseIntents,
   mergeDateEntities,

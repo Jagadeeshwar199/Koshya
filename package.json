@@ -17,6 +17,8 @@
     "test:intent-pipeline": "node tests/intent-pipeline.test.js",
     "test:production-routing": "node tests/production-routing.test.js",
     "test:intent-router": "node tests/intent-router.test.js",
+    "test:detection-engine": "node tests/detection-engine.test.js",
+    "test:shadow-detection": "node tests/shadow-detection.test.js",
     "test:reminder-confirmation": "node tests/reminder-confirmation.test.js",
     "test:reminder-query": "node tests/reminder-query.test.js",
     "test:reminder-update": "node tests/reminder-update.test.js",

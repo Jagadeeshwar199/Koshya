@@ -1,26 +1,32 @@
 const { normalizeText, applyTypoFixes } = require('../utils/textUtils')
 const {
   detectIntent,
-  detectClauseIntents,
   MIN_CONFIDENCE
 } = require('./intentService')
 const { parseWithAI } = require('./aiIntentParser')
 const { validateIntent } = require('./intentValidationService')
 const pipelineLog = require('../observability/pipelineLogService')
+const { isLegacyIntentEngineEnabled } = require('../config/constants')
+const {
+  detectAndPlan,
+  useLegacyEngine,
+  Decision
+} = require('../detection/detectionEngine')
+const logger = require('../../utils/logger')
+const { setOutboundCapture, clearOutboundCapture } = require('./whatsappService')
+
+const THRESHOLD = MIN_CONFIDENCE
+
+function logParserDetection(payload) {
+  return require('./parserTelemetryService').logParserDetection(payload)
+}
+
 function matchedRule(intent) {
   const matches = intent?.match_details?.matches
   if (!matches?.length) return null
   const hit = matches.find((m) => m.rule && m.rule !== intent.intent)
   return hit?.rule || matches[0].rule || null
 }
-
-function logParserDetection(payload) {
-  return require('./parserTelemetryService').logParserDetection(payload)
-}
-const logger = require('../../utils/logger')
-const { setOutboundCapture, clearOutboundCapture } = require('./whatsappService')
-
-const THRESHOLD = MIN_CONFIDENCE
 
 function createContext(userId, rawMessage) {
   return {
@@ -61,59 +67,102 @@ function detectionLogFields(text) {
   }
 }
 
-async function stageDetect(ctx, text) {
-  ctx.stage = 'detect'
+async function logDetectionRow(ctx, text, payload, ms, pipeline) {
+  await pipelineLog.logDetection(ctx.messageId, {
+    pipeline,
+    ...detectionLogFields(text),
+    ...payload,
+    processing_time_ms: ms
+  })
+}
+
+async function stageDetectLegacy(ctx, text) {
   const t0 = Date.now()
-  try {
-    const intent = detectIntent(text)
-    const ms = Date.now() - t0
-    const ok = intent.intent !== 'UNKNOWN' && intent.confidence >= THRESHOLD
-    await pipelineLog.logDetection(ctx.messageId, {
-      pipeline: 'legacy',
-      ...detectionLogFields(text),
+  const intent = detectIntent(text)
+  const ms = Date.now() - t0
+  const ok = intent.intent !== 'UNKNOWN' && intent.confidence >= THRESHOLD
+  await logDetectionRow(
+    ctx,
+    text,
+    {
       intent: intent.intent,
       confidence: intent.confidence,
       entities: intent.entities,
       success: ok,
       failure_reason: ok ? null : 'low_confidence_or_unknown',
-      processing_time_ms: ms,
       match_details: intent.match_details ?? null
-    })
-    await logParserDetection({
-      user_id: ctx.userId,
-      message_id: ctx.messageId,
-      raw_message: text,
-      normalized_message: ctx.normalized,
-      extracted_entities: intent.entities,
-      selected_intent: intent.intent,
-      confidence: intent.confidence,
-      matched_rule: matchedRule(intent)
-    })
+    },
+    ms,
+    'legacy'
+  )
+  await logParserDetection({
+    user_id: ctx.userId,
+    message_id: ctx.messageId,
+    raw_message: text,
+    normalized_message: ctx.normalized,
+    extracted_entities: intent.entities,
+    selected_intent: intent.intent,
+    confidence: intent.confidence,
+    matched_rule: matchedRule(intent)
+  })
+  if (!useLegacyEngine()) {
     try {
-      const t1 = Date.now()
       const shadow = require('../detection/shadowPipeline').runShadowDetection(text)
-      await pipelineLog.logShadowDetection(ctx.messageId, shadow, Date.now() - t1)
-    } catch (shadowErr) {
-      logger.error('pipeline.shadow_detect_failed', { error: shadowErr.message })
+      await pipelineLog.logShadowDetection(ctx.messageId, shadow, Date.now() - t0, 'shadow')
+    } catch (e) {
+      logger.error('pipeline.shadow_detect_failed', { error: e.message })
     }
-    logger.info('pipeline.detect', { messageId: ctx.messageId, intent: intent.intent, confidence: intent.confidence, ms })
-    return intent
+  }
+  return intent
+}
+
+async function stageDetectPrimary(ctx, text) {
+  const t0 = Date.now()
+  const det = await detectAndPlan(text, ctx)
+  const ms = Date.now() - t0
+  await pipelineLog.logShadowDetection(ctx.messageId, det, ms, 'primary')
+  await logParserDetection({
+    user_id: ctx.userId,
+    message_id: ctx.messageId,
+    raw_message: text,
+    normalized_message: ctx.normalized,
+    extracted_entities: det.entities,
+    selected_intent: `${det.domain}:${det.action}`,
+    confidence: det.score,
+    matched_rule: det.decision
+  })
+  if (det.aiMeta) await pipelineLog.logAI(ctx.messageId, { ...det.aiMeta, success: det.aiMeta.success })
+  ctx.lastDetection = det
+  logger.info('pipeline.detect.primary', {
+    messageId: ctx.messageId,
+    domain: det.domain,
+    action: det.action,
+    decision: det.decision,
+    ms
+  })
+  return det.intent
+}
+
+async function stageDetect(ctx, text) {
+  ctx.stage = 'detect'
+  try {
+    if (useLegacyEngine()) return await stageDetectLegacy(ctx, text)
+    return await stageDetectPrimary(ctx, text)
   } catch (err) {
-    await pipelineLog.logDetection(ctx.messageId, {
-      ...detectionLogFields(text),
-      intent: 'ERROR',
-      confidence: 0,
-      entities: {},
-      success: false,
-      failure_reason: err.message,
-      processing_time_ms: Date.now() - t0
-    })
+    await logDetectionRow(
+      ctx,
+      text,
+      { intent: 'ERROR', confidence: 0, entities: {}, success: false, failure_reason: err.message },
+      0,
+      useLegacyEngine() ? 'legacy' : 'primary'
+    )
     await pipelineLog.logSystemError('detect', err, { messageId: ctx.messageId, text })
     throw err
   }
 }
 
 async function stageAI(ctx, intent, text) {
+  if (!useLegacyEngine()) return intent
   ctx.stage = 'ai_fallback'
   if (intent.confidence >= THRESHOLD) return intent
   try {
@@ -123,29 +172,11 @@ async function stageAI(ctx, intent, text) {
       deterministic: intent
     })
     await pipelineLog.logAI(ctx.messageId, ai)
-    await logParserDetection({
-      user_id: ctx.userId,
-      message_id: ctx.messageId,
-      raw_message: ctx.rawMessage,
-      normalized_message: ctx.normalized,
-      extracted_entities: intent.entities,
-      selected_intent: ai.ai_intent || intent.intent,
-      confidence: ai.confidence ?? intent.confidence,
-      matched_rule: ai.success ? 'ai_fallback' : ai.failure_reason || 'ai_fallback'
-    })
-    logger.info('pipeline.ai_fallback', { messageId: ctx.messageId, success: ai.success, reason: ai.failure_reason })
     if (ai.success && ai.ai_intent && Number(ai.confidence) >= THRESHOLD) {
       return { ...intent, intent: ai.ai_intent, confidence: Number(ai.confidence), rawText: intent.rawText || text, entities: intent.entities, source: 'ai' }
     }
     return intent
   } catch (err) {
-    await pipelineLog.logAI(ctx.messageId, {
-      raw_message: ctx.rawMessage,
-      normalized_message: ctx.normalized,
-      prompt_sent: null,
-      success: false,
-      failure_reason: err.message
-    })
     await pipelineLog.logSystemError('ai_fallback', err, { messageId: ctx.messageId })
     return intent
   }
@@ -156,11 +187,9 @@ async function stageValidate(ctx, intent, text) {
   try {
     const { passed, error } = validateIntent(intent, text)
     await pipelineLog.logValidation(ctx.messageId, intent.intent, passed, error)
-    logger.info('pipeline.validate', { messageId: ctx.messageId, intent: intent.intent, passed, error })
     return { passed, error }
   } catch (err) {
     await pipelineLog.logValidation(ctx.messageId, intent?.intent || 'ERROR', false, err.message)
-    await pipelineLog.logSystemError('validate', err, { messageId: ctx.messageId })
     throw err
   }
 }
@@ -174,16 +203,30 @@ async function stageExecute(ctx, actionType, fn) {
     const ms = Date.now() - t0
     const ok = result?.ok !== false && !result?.error
     await pipelineLog.logExecution(ctx.messageId, actionType, ok, result?.error || null, ms)
-    logger.info('pipeline.execute', { messageId: ctx.messageId, actionType, ok, ms })
     return result
   } catch (err) {
     await pipelineLog.logExecution(ctx.messageId, actionType, false, err.message, Date.now() - t0)
-    await pipelineLog.logSystemError('execute', err, { messageId: ctx.messageId, actionType })
     throw err
   }
 }
 
 async function processClause(ctx, text, executeFn) {
+  if (!useLegacyEngine()) {
+    const intent = await stageDetect(ctx, text)
+    const det = ctx.lastDetection
+    if (det?.decision === Decision.CLARIFY) {
+      const { handleDetectionClarify } = require('../controllers/queryController')
+      return stageExecute(ctx, 'CLARIFY', () =>
+        handleDetectionClarify(ctx.userId, det.intent, det.clarification)
+      )
+    }
+    const validation = await stageValidate(ctx, intent, text)
+    if (!validation.passed) {
+      return executeFn(intent, { validationFailed: true, validationError: validation.error })
+    }
+    return stageExecute(ctx, intent.intent, () => executeFn(intent, {}))
+  }
+
   let intent = await stageDetect(ctx, text)
   intent = await stageAI(ctx, intent, text)
   const validation = await stageValidate(ctx, intent, text)
