@@ -65,7 +65,8 @@ async function stageDetect(ctx, text) {
       entities: intent.entities,
       success: ok,
       failure_reason: ok ? null : 'low_confidence_or_unknown',
-      processing_time_ms: ms
+      processing_time_ms: ms,
+      match_details: intent.match_details ?? null
     })
     logger.info('pipeline.detect', { messageId: ctx.messageId, intent: intent.intent, confidence: intent.confidence, ms })
     return intent

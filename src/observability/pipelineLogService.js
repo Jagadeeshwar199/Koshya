@@ -39,7 +39,8 @@ async function logDetection(messageId, payload) {
     extracted_entities: payload.entities || {},
     success: payload.success !== false,
     failure_reason: payload.failure_reason || null,
-    processing_time_ms: payload.processing_time_ms || 0
+    processing_time_ms: payload.processing_time_ms || 0,
+    match_details: payload.match_details ?? null
   })
 }
 

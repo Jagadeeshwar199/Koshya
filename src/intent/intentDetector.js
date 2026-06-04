@@ -951,18 +951,33 @@ function isShortAmbiguous(text, lower, entities) {
   )
 }
 
+function buildMatchDetails(intent, scores, lower, entities) {
+  const matches = []
+  if (entities.serviceName) matches.push({ rule: String(entities.serviceName).toLowerCase(), score: 0.4 })
+  if (/\btomorrow\b/i.test(lower)) matches.push({ rule: 'tomorrow', score: 0.35 })
+  if (/\btoday\b/i.test(lower)) matches.push({ rule: 'today', score: 0.3 })
+  if (/\brenewal\b/i.test(lower)) matches.push({ rule: 'renewal', score: 0.3 })
+  if (/\bexpir/i.test(lower)) matches.push({ rule: 'expiry', score: 0.35 })
+  if (/\bremind/i.test(lower)) matches.push({ rule: 'remind', score: 0.3 })
+  const win = scores[intent]
+  if (win > 0) matches.push({ rule: intent, score: Number(Number(win).toFixed(2)) })
+  return { intent, matches }
+}
+
 function buildResult(intent, confidence, text, entities, extra = {}) {
+  const { match_details, ...entityExtra } = extra
   return {
     intent,
     confidence,
     rawText: text,
+    ...(match_details ? { match_details } : {}),
     entities: {
       ...(entities.serviceName ? { serviceName: entities.serviceName } : {}),
       ...(entities.amount ? { amount: entities.amount } : {}),
       ...(entities.date ? { date: entities.date } : {}),
       ...(entities.recurrence ? { recurrence: entities.recurrence } : {}),
       ...(entities.actionText ? { actionText: entities.actionText } : {}),
-      ...extra
+      ...entityExtra
     }
   }
 }
@@ -1015,7 +1030,10 @@ function detectIntent(message) {
       ? { queryType: 'expiry' }
       : resolveQueryType(text, lower, intent)
 
-  return buildResult(intent, confidence, text, entities, extra)
+  return buildResult(intent, confidence, text, entities, {
+    ...extra,
+    match_details: buildMatchDetails(intent, scores, lower, entities)
+  })
 }
 
 function mergeDateEntities(base, patch) {
