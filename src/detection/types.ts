@@ -20,7 +20,8 @@ export enum Action {
 export enum Decision {
   EXECUTE = 'EXECUTE',
   CLARIFY = 'CLARIFY',
-  AI_FALLBACK = 'AI_FALLBACK'
+  AI_FALLBACK = 'AI_FALLBACK',
+  REJECTED_LOW_SCORE = 'REJECTED_LOW_SCORE'
 }
 
 export interface DetectionResult {

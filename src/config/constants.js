@@ -4,10 +4,16 @@ const MIN_ACTION_SCORE = Number(process.env.MIN_ACTION_SCORE || 0.45)
 const AI_FALLBACK_THRESHOLD = Number(process.env.AI_FALLBACK_THRESHOLD || 0.45)
 const MIN_INTENT_SCORE = Number(process.env.MIN_INTENT_SCORE || 25)
 
+function isHelpIntentMessage(text) {
+  const t = String(text || '').trim()
+  if (/^(?:hi|hello|hey|thanks|thank\s+you|how\s+are\s+you|help|start|commands|\?)$/i.test(t)) return true
+  if (/^good\s+(?:morning|evening|night)[!.?\s]*$/i.test(t)) return true
+  if (/^what\s+can\s+you\s+do\??$/i.test(t)) return true
+  return /^(?:ok|okay)[!.?\s]*$/i.test(t)
+}
+
 function isChitchatMessage(text) {
-  return /^(?:hi|hello|hey|thanks|thank\s+you|how\s+are\s+you|good\s+(?:morning|evening|night)|ok|okay)[!.?\s]*$/i.test(
-    String(text || '').trim()
-  )
+  return isHelpIntentMessage(text)
 }
 
 function isLegacyIntentEngineEnabled() {
@@ -19,6 +25,7 @@ module.exports = {
   MIN_ACTION_SCORE,
   AI_FALLBACK_THRESHOLD,
   MIN_INTENT_SCORE,
+  isHelpIntentMessage,
   isChitchatMessage,
   isLegacyIntentEngineEnabled
 }

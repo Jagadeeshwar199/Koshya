@@ -20,7 +20,8 @@ const Action = {
 const Decision = {
   EXECUTE: 'EXECUTE',
   CLARIFY: 'CLARIFY',
-  AI_FALLBACK: 'AI_FALLBACK'
+  AI_FALLBACK: 'AI_FALLBACK',
+  REJECTED_LOW_SCORE: 'REJECTED_LOW_SCORE'
 }
 
 module.exports = { Domain, Action, Decision }

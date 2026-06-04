@@ -3,7 +3,7 @@
  * EXTENSION: add Domain enum value + branch here (e.g. BILLING, TASKS).
  */
 const { Domain } = require('./types')
-const { isChitchatMessage } = require('../config/constants')
+const { isHelpIntentMessage } = require('../config/constants')
 const { groupScore } = require('../intent/fuzzyMatcher')
 const {
   REMINDER_TERMS,
@@ -12,8 +12,8 @@ const {
 } = require('../intent/semanticDictionaries')
 
 function detectDomain(lower, entities = {}) {
-  if (isChitchatMessage(lower)) {
-    return { domain: Domain.GENERAL, score: 0.95, reasons: ['chitchat'] }
+  if (isHelpIntentMessage(lower)) {
+    return { domain: Domain.GENERAL, score: 0.95, reasons: ['help_intent'] }
   }
   const reminder = groupScore(lower, REMINDER_TERMS, DEFAULT_FUZZY_THRESHOLD)
   const subscription = groupScore(lower, SUBSCRIPTION_TERMS, DEFAULT_FUZZY_THRESHOLD)
@@ -60,7 +60,7 @@ function detectDomain(lower, entities = {}) {
     return { domain: Domain.SUBSCRIPTION, score: 0.55, reasons }
   }
 
-  return { domain: Domain.UNKNOWN, score: 0.35, reasons: ['no_domain_signal'] }
+  return { domain: Domain.UNKNOWN, score: 0.2, reasons: ['no_domain_signal'] }
 }
 
 module.exports = { detectDomain }

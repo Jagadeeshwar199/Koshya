@@ -7,8 +7,12 @@ const { Action } = require('./types')
 function detectAction(lower, domain, entities = {}) {
   const reasons = []
 
-  if (/^(?:hi|hello|hey|thanks|thank\s+you|how\s+are\s+you|good\s+(?:morning|evening))$/i.test(lower.trim())) {
-    return { action: Action.HELP, score: 0.95, reasons: ['greeting'] }
+  if (
+    /^(?:hi|hello|hey|thanks|thank\s+you|how\s+are\s+you|help|start|commands|\?)$/i.test(lower.trim()) ||
+    /^good\s+(?:morning|evening|night)$/i.test(lower.trim()) ||
+    /^what\s+can\s+you\s+do\??$/i.test(lower.trim())
+  ) {
+    return { action: Action.HELP, score: 0.95, reasons: ['help_intent'] }
   }
   if (/^change\s+to\b/i.test(lower.trim()) || /^make\s+it\b/i.test(lower.trim())) {
     return { action: Action.UPDATE, score: 0.92, reasons: ['reschedule_phrase'] }
@@ -50,7 +54,7 @@ function detectAction(lower, domain, entities = {}) {
     return { action: Action.UNKNOWN, score: 0.4, reasons: ['short_subscription'] }
   }
 
-  return { action: Action.UNKNOWN, score: 0.35, reasons: ['no_action_signal'] }
+  return { action: Action.UNKNOWN, score: 0.2, reasons: ['no_action_signal'] }
 }
 
 module.exports = { detectAction }

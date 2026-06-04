@@ -40,13 +40,17 @@ async function run() {
 
   process.env.AI_INTENT_ENABLED = 'false'
   const unk = await detectAndPlan('xyzzy qwerty')
-  assert.ok(unk.decision === Decision.AI_FALLBACK || unk.decision === Decision.CLARIFY)
+  assert.ok(
+    [Decision.AI_FALLBACK, Decision.CLARIFY, Decision.REJECTED_LOW_SCORE].includes(unk.decision)
+  )
 
   const stats = getAnalytics()
   assert.ok(stats.execution_count >= 1)
 
   const ai = await detectAndPlan('asdfghjkl qwerty uiop')
-  assert.ok(ai.decision === Decision.AI_FALLBACK || ai.decision === Decision.CLARIFY)
+  assert.ok(
+    [Decision.AI_FALLBACK, Decision.CLARIFY, Decision.REJECTED_LOW_SCORE].includes(ai.decision)
+  )
 
   console.log('Detection engine tests passed: 10')
 }

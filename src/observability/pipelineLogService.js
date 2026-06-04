@@ -42,7 +42,13 @@ async function logDetection(messageId, payload) {
     success: payload.success !== false,
     failure_reason: payload.failure_reason || null,
     processing_time_ms: payload.processing_time_ms || 0,
-    match_details: payload.match_details ?? null
+    match_details: payload.match_details ?? null,
+    domain: payload.domain ?? null,
+    action: payload.action ?? null,
+    score: payload.score ?? null,
+    can_execute: payload.can_execute ?? null,
+    used_ai: payload.used_ai === true,
+    planner_decision: payload.planner_decision ?? null
   })
 }
 
@@ -86,28 +92,68 @@ async function logExecution(messageId, actionType, success, errorMessage, execut
   })
 }
 
-async function logShadowDetection(messageId, result, ms = 0, pipeline = 'shadow') {
-  if (!messageId || !result) return null
-  return safeInsert('detection_logs', {
-    message_id: messageId,
+function primaryDetectionRow(result, ms, pipeline) {
+  const intentLabel = `${result.domain}:${result.action}`
+  const rejected = result.decision === 'REJECTED_LOW_SCORE'
+  return {
     pipeline,
     message: result.message,
     raw_message: result.message,
     normalized_message: result.message,
     domain: result.domain,
     action: result.action,
-    score: result.score,
-    detected_intent: `SHADOW:${result.domain}:${result.action}`,
+    score: result.scorePercent ?? Math.round((result.score || 0) * 100),
+    detected_intent: rejected ? 'REJECTED_LOW_SCORE' : intentLabel,
     confidence: result.score,
     extracted_entities: result.entities || {},
     reasons: result.reasons || [],
-    can_execute: result.canExecute,
+    can_execute: result.canExecute === true,
     missing_fields: result.missingFields || [],
     used_ai: result.usedAI === true,
-    success: result.canExecute,
-    failure_reason: result.canExecute ? null : 'shadow_not_executable',
-    processing_time_ms: ms
-  })
+    planner_decision: result.plannerDecision || result.decision,
+    success: result.decision === 'EXECUTE',
+    failure_reason: rejected ? 'REJECTED_LOW_SCORE' : result.canExecute ? null : result.decision,
+    processing_time_ms: ms,
+    match_details: result.rejectionLog || result.match_details || {
+      winner: result.winner,
+      planner_decision: result.plannerDecision,
+      decision: result.decision,
+      used_ai: result.usedAI === true,
+      can_execute: result.canExecute === true
+    }
+  }
+}
+
+async function logShadowDetection(messageId, result, ms = 0, pipeline = 'shadow') {
+  if (!messageId || !result) return null
+  const row =
+    pipeline === 'primary'
+      ? primaryDetectionRow(result, ms, pipeline)
+      : {
+          message_id: messageId,
+          pipeline,
+          message: result.message,
+          raw_message: result.message,
+          normalized_message: result.message,
+          domain: result.domain,
+          action: result.action,
+          score: result.score,
+          detected_intent: `SHADOW:${result.domain}:${result.action}`,
+          confidence: result.score,
+          extracted_entities: result.entities || {},
+          reasons: result.reasons || [],
+          can_execute: result.canExecute,
+          missing_fields: result.missingFields || [],
+          used_ai: result.usedAI === true,
+          planner_decision: result.plannerDecision || result.decision,
+          success: result.canExecute,
+          failure_reason: result.canExecute ? null : 'shadow_not_executable',
+          processing_time_ms: ms
+        }
+  if (pipeline === 'primary') {
+    return safeInsert('detection_logs', { message_id: messageId, ...row })
+  }
+  return safeInsert('detection_logs', { message_id: messageId, ...row })
 }
 
 async function logSystemError(stage, err, requestPayload) {

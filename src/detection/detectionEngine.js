@@ -14,7 +14,7 @@ const analytics = require('../services/detectionAnalyticsService')
 const {
   isLegacyIntentEngineEnabled,
   MIN_INTENT_SCORE,
-  isChitchatMessage
+  isHelpIntentMessage
 } = require('../config/constants')
 const logger = require('../../utils/logger')
 const intentDetector = require('../intent/intentDetector')
@@ -59,6 +59,7 @@ function runDetection(rawMessage) {
     entities,
     reasons,
     missingFields: plan.missingFields,
+    plannerDecision: plan.decision,
     decision: plan.decision,
     clarification: plan.clarification,
     canExecute: plan.decision === Decision.EXECUTE,
@@ -66,28 +67,49 @@ function runDetection(rawMessage) {
   }
 }
 
+function lowScoreRejectionPayload(det) {
+  return {
+    message: det.message,
+    winner: det.winner,
+    score: det.scorePercent,
+    decision: Decision.REJECTED_LOW_SCORE
+  }
+}
+
+function logRejectedLowScore(det) {
+  const payload = lowScoreRejectionPayload(det)
+  logger.info('detection.rejected_low_score', payload)
+  det.rejectionLog = payload
+  return det
+}
+
 function finalizeWeakDetection(det) {
   logger.info('detection.winner', {
     winner: det.winner,
     score: det.scorePercent,
     decision: det.decision,
+    planner_decision: det.plannerDecision,
+    used_ai: det.usedAI === true,
+    can_execute: det.canExecute === true,
     message: det.message
   })
-  if (det.scorePercent >= MIN_INTENT_SCORE) return det
-  if (isChitchatMessage(det.message)) {
+  if (isHelpIntentMessage(det.message)) {
     det.domain = Domain.GENERAL
     det.action = Action.HELP
     det.decision = Decision.EXECUTE
     det.clarification = null
     det.winner = 'GENERAL:HELP'
     det.scorePercent = 99
-    det.reasons.push('chitchat_routed_help')
+    det.canExecute = true
+    det.reasons.push('help_intent_routed')
     return det
   }
-  det.decision = Decision.AI_FALLBACK
+  if (det.scorePercent >= MIN_INTENT_SCORE) return det
+  det.decision = Decision.REJECTED_LOW_SCORE
   det.clarification = null
+  det.canExecute = false
   det.reasons.push(`weak_score_guard:${det.scorePercent}`)
-  return det
+  return logRejectedLowScore(det)
 }
 
 async function applyAiFallback(ctx, det) {
@@ -119,9 +141,11 @@ async function applyAiFallback(ctx, det) {
     winner: plan.winner || `${ai.domain}:${ai.action}`,
     scorePercent: plan.score ?? Math.round(combined * 100),
     entities,
+    plannerDecision: plan.decision,
     decision: plan.decision,
     clarification: plan.clarification,
     missingFields: plan.missingFields,
+    canExecute: plan.decision === Decision.EXECUTE,
     usedAI: true,
     aiMeta: ai
   }
@@ -159,9 +183,12 @@ async function detectAndPlan(rawMessage, ctx = null) {
   }
 
   let det = finalizeWeakDetection(runDetection(rawMessage))
-  if (det.decision === Decision.AI_FALLBACK) {
+  if (det.decision === Decision.REJECTED_LOW_SCORE) {
+    det = logRejectedLowScore(det)
+  } else if (det.decision === Decision.AI_FALLBACK) {
     analytics.recordAiFallback(det.message)
     det = finalizeWeakDetection(await applyAiFallback(ctx, det))
+    if (det.decision === Decision.REJECTED_LOW_SCORE) det = logRejectedLowScore(det)
   }
   if (det.decision === Decision.CLARIFY && det.scorePercent >= MIN_INTENT_SCORE) {
     analytics.recordClarification(det.message)

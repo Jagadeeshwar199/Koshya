@@ -7,7 +7,7 @@ const {
   MIN_ACTION_SCORE,
   AI_FALLBACK_THRESHOLD,
   MIN_INTENT_SCORE,
-  isChitchatMessage
+  isHelpIntentMessage
 } = require('../config/constants')
 const { buildClarification } = require('./clarification')
 
@@ -44,12 +44,19 @@ function planExecution(domain, action, entities, lower, scores) {
   const scorePct = Math.round(combined * 100)
   const winner = `${domain}:${action}`
 
-  if (isChitchatMessage(lower)) {
-    return { decision: Decision.EXECUTE, missingFields: [], clarification: null, reasons: [...reasons, 'chitchat_help'], winner, score: scorePct }
+  if (isHelpIntentMessage(lower)) {
+    return {
+      decision: Decision.EXECUTE,
+      missingFields: [],
+      clarification: null,
+      reasons: [...reasons, 'help_intent'],
+      winner: 'GENERAL:HELP',
+      score: scorePct
+    }
   }
   if (scorePct < MIN_INTENT_SCORE) {
     return {
-      decision: Decision.AI_FALLBACK,
+      decision: Decision.REJECTED_LOW_SCORE,
       missingFields: [],
       clarification: null,
       reasons: [...reasons, `weak_intent_score:${scorePct}`],
@@ -85,7 +92,7 @@ function planExecution(domain, action, entities, lower, scores) {
     const isWorkflow = domain === Domain.REMINDER || domain === Domain.SUBSCRIPTION
     if (isWorkflow && scorePct < MIN_INTENT_SCORE) {
       return {
-        decision: Decision.AI_FALLBACK,
+        decision: Decision.REJECTED_LOW_SCORE,
         missingFields: [],
         clarification: null,
         reasons: [...reasons, 'weak_no_clarify'],
