@@ -47,6 +47,9 @@ async function logAI(messageId, payload) {
   if (!messageId) return null
   return safeInsert('ai_detection_logs', {
     message_id: messageId,
+    raw_message: payload.raw_message ?? null,
+    normalized_message: payload.normalized_message ?? null,
+    model: payload.model ?? null,
     prompt_sent: payload.prompt_sent || null,
     ai_response: payload.ai_response || null,
     ai_intent: payload.ai_intent || null,

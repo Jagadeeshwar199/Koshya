@@ -22,6 +22,7 @@ function buildPrompt(rawMessage, normalized, deterministic) {
 
 function failResult(prompt, reason, extra = {}) {
   return {
+    model: MODEL,
     prompt_sent: prompt,
     ai_response: extra.ai_response ?? null,
     ai_intent: extra.ai_intent ?? null,
@@ -34,6 +35,7 @@ function failResult(prompt, reason, extra = {}) {
 
 function okResult(prompt, aiResponse, aiIntent, confidence, tokenUsage) {
   return {
+    model: MODEL,
     prompt_sent: prompt,
     ai_response: aiResponse,
     ai_intent: aiIntent,
@@ -100,15 +102,16 @@ async function callGemini(prompt) {
 
 async function parseWithAI({ rawMessage, normalized, deterministic }) {
   const prompt = buildPrompt(rawMessage, normalized, deterministic)
+  const telemetry = { raw_message: rawMessage, normalized_message: normalized }
 
   if (process.env.AI_INTENT_ENABLED !== 'true') {
     logger.info('ai_intent.disabled', { reason: 'ai_disabled' })
-    return failResult(prompt, 'ai_disabled')
+    return { ...telemetry, ...failResult(prompt, 'ai_disabled') }
   }
 
   if (!process.env.GEMINI_API_KEY) {
     logger.error('ai_intent.missing_key', {})
-    return failResult(prompt, 'missing_gemini_api_key')
+    return { ...telemetry, ...failResult(prompt, 'missing_gemini_api_key') }
   }
 
   try {
@@ -122,13 +125,13 @@ async function parseWithAI({ rawMessage, normalized, deterministic }) {
       parsed = parseJsonText(text)
     } catch (parseErr) {
       logger.error('ai_intent.json_parse_failed', { error: parseErr.message, text: text.slice(0, 500) })
-      return failResult(prompt, 'invalid_json_response', { ai_response: text })
+      return { ...telemetry, ...failResult(prompt, 'invalid_json_response', { ai_response: text }) }
     }
 
     const aiIntent = mapIntent(parsed.intent)
     const confidence = Math.min(1, Math.max(0, Number(parsed.confidence)))
     if (!Number.isFinite(confidence)) {
-      return failResult(prompt, 'invalid_confidence', { ai_response: text, ai_intent: aiIntent })
+      return { ...telemetry, ...failResult(prompt, 'invalid_confidence', { ai_response: text, ai_intent: aiIntent }) }
     }
 
     logger.info('ai_intent.classified', {
@@ -138,14 +141,14 @@ async function parseWithAI({ rawMessage, normalized, deterministic }) {
       mapped_unknown: aiIntent === INTENTS.UNKNOWN && parsed.intent !== INTENTS.UNKNOWN
     })
 
-    return okResult(prompt, text, aiIntent, confidence, extractUsage(response))
+    return { ...telemetry, ...okResult(prompt, text, aiIntent, confidence, extractUsage(response)) }
   } catch (err) {
     const reason = err.message === 'gemini_timeout' ? 'gemini_timeout' : 'gemini_request_failed'
     logger.error('ai_intent.failed', { reason, error: err.message, stack: err.stack })
     if (err.message?.includes("Cannot find module '@google/genai'")) {
-      return failResult(prompt, 'gemini_sdk_missing')
+      return { ...telemetry, ...failResult(prompt, 'gemini_sdk_missing') }
     }
-    return failResult(prompt, reason, { ai_response: err.message })
+    return { ...telemetry, ...failResult(prompt, reason, { ai_response: err.message }) }
   }
 }
 

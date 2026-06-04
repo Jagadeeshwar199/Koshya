@@ -100,7 +100,13 @@ async function stageAI(ctx, intent, text) {
     }
     return intent
   } catch (err) {
-    await pipelineLog.logAI(ctx.messageId, { prompt_sent: null, success: false, failure_reason: err.message })
+    await pipelineLog.logAI(ctx.messageId, {
+      raw_message: ctx.rawMessage,
+      normalized_message: ctx.normalized,
+      prompt_sent: null,
+      success: false,
+      failure_reason: err.message
+    })
     await pipelineLog.logSystemError('ai_fallback', err, { messageId: ctx.messageId })
     return intent
   }
