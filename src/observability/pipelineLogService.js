@@ -53,9 +53,11 @@ async function logAI(messageId, payload) {
     prompt_sent: payload.prompt_sent || null,
     ai_response: payload.ai_response || null,
     ai_intent: payload.ai_intent || null,
+    ai_confidence: payload.ai_confidence ?? payload.confidence ?? null,
     confidence: payload.confidence ?? null,
     token_usage: payload.token_usage || null,
     success: payload.success === true,
+    error_message: payload.error_message ?? payload.failure_reason ?? null,
     failure_reason: payload.failure_reason || null
   })
 }
