@@ -32,6 +32,8 @@ async function logDetection(messageId, payload) {
   if (!messageId) return null
   return safeInsert('detection_logs', {
     message_id: messageId,
+    pipeline: payload.pipeline || 'legacy',
+    message: payload.message ?? payload.raw_message ?? null,
     raw_message: payload.raw_message ?? null,
     normalized_message: payload.normalized_message ?? null,
     detected_intent: payload.intent,
@@ -84,6 +86,30 @@ async function logExecution(messageId, actionType, success, errorMessage, execut
   })
 }
 
+async function logShadowDetection(messageId, result, ms = 0) {
+  if (!messageId || !result) return null
+  return safeInsert('detection_logs', {
+    message_id: messageId,
+    pipeline: 'shadow',
+    message: result.message,
+    raw_message: result.message,
+    normalized_message: result.message,
+    domain: result.domain,
+    action: result.action,
+    score: result.score,
+    detected_intent: `SHADOW:${result.domain}:${result.action}`,
+    confidence: result.score,
+    extracted_entities: result.entities || {},
+    reasons: result.reasons || [],
+    can_execute: result.canExecute,
+    missing_fields: result.missingFields || [],
+    used_ai: result.usedAI === true,
+    success: result.canExecute,
+    failure_reason: result.canExecute ? null : 'shadow_not_executable',
+    processing_time_ms: ms
+  })
+}
+
 async function logSystemError(stage, err, requestPayload) {
   return safeInsert('system_errors', {
     stage,
@@ -96,6 +122,7 @@ async function logSystemError(stage, err, requestPayload) {
 module.exports = {
   logMessage,
   logDetection,
+  logShadowDetection,
   logAI,
   logValidation,
   logExecution,

@@ -69,6 +69,7 @@ async function stageDetect(ctx, text) {
     const ms = Date.now() - t0
     const ok = intent.intent !== 'UNKNOWN' && intent.confidence >= THRESHOLD
     await pipelineLog.logDetection(ctx.messageId, {
+      pipeline: 'legacy',
       ...detectionLogFields(text),
       intent: intent.intent,
       confidence: intent.confidence,
@@ -88,6 +89,13 @@ async function stageDetect(ctx, text) {
       confidence: intent.confidence,
       matched_rule: matchedRule(intent)
     })
+    try {
+      const t1 = Date.now()
+      const shadow = require('../detection/shadowPipeline').runShadowDetection(text)
+      await pipelineLog.logShadowDetection(ctx.messageId, shadow, Date.now() - t1)
+    } catch (shadowErr) {
+      logger.error('pipeline.shadow_detect_failed', { error: shadowErr.message })
+    }
     logger.info('pipeline.detect', { messageId: ctx.messageId, intent: intent.intent, confidence: intent.confidence, ms })
     return intent
   } catch (err) {
