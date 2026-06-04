@@ -145,6 +145,10 @@ async function trackParserEvent(payload) {
     user_id: payload.user_id,
     raw_message: payload.raw_message,
     normalized_message: payload.normalized_message,
+    message_id: payload.message_id || null,
+    selected_intent: payload.selected_intent || null,
+    confidence: payload.confidence ?? null,
+    matched_rule: payload.matched_rule || null,
     detected_intents: payload.detected_intents,
     confidence_scores: payload.confidence_scores,
     extracted_entities: payload.extracted_entities,
@@ -160,6 +164,30 @@ async function trackParserEvent(payload) {
     logger.error('parser_telemetry.insert_failed', { error: error.message, userId: payload.user_id })
   }
   return row
+}
+
+async function logParserDetection(payload) {
+  try {
+    const intent = payload.selected_intent
+    await trackParserEvent({
+      user_id: payload.user_id,
+      message_id: payload.message_id,
+      raw_message: payload.raw_message,
+      normalized_message: payload.normalized_message || payload.raw_message,
+      selected_intent: intent,
+      confidence: payload.confidence,
+      matched_rule: payload.matched_rule,
+      extracted_entities: formatEntities(payload.extracted_entities || {}),
+      detected_intents: intent ? [intentSlug(intent)] : [],
+      confidence_scores:
+        intent && payload.confidence != null
+          ? { [intentSlug(intent)]: Math.round(Number(payload.confidence) * 100) }
+          : {},
+      success: true
+    })
+  } catch (err) {
+    logger.error('parser_events.insert_exception', { error: err.message })
+  }
 }
 
 function isAdminPhone(userId) {
@@ -296,14 +324,14 @@ async function handleParserAdminCommand(sender, command) {
   return { ok: true, intent: 'ADMIN', adminCommand: command }
 }
 
-const intentPipeline = require('./intentPipelineService')
-
 async function logIncomingMessage(userId, rawMessage, routeFn) {
+  const intentPipeline = require('./intentPipelineService')
   return intentPipeline.runPipeline(userId, rawMessage, routeFn)
 }
 
 module.exports = {
   trackParserEvent,
+  logParserDetection,
   buildSnapshot,
   assessOutcome,
   routeName,

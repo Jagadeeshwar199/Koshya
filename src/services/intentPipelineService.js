@@ -7,6 +7,16 @@ const {
 const { parseWithAI } = require('./aiIntentParser')
 const { validateIntent } = require('./intentValidationService')
 const pipelineLog = require('../observability/pipelineLogService')
+function matchedRule(intent) {
+  const matches = intent?.match_details?.matches
+  if (!matches?.length) return null
+  const hit = matches.find((m) => m.rule && m.rule !== intent.intent)
+  return hit?.rule || matches[0].rule || null
+}
+
+function logParserDetection(payload) {
+  return require('./parserTelemetryService').logParserDetection(payload)
+}
 const logger = require('../../utils/logger')
 const { setOutboundCapture, clearOutboundCapture } = require('./whatsappService')
 
@@ -68,6 +78,16 @@ async function stageDetect(ctx, text) {
       processing_time_ms: ms,
       match_details: intent.match_details ?? null
     })
+    await logParserDetection({
+      user_id: ctx.userId,
+      message_id: ctx.messageId,
+      raw_message: text,
+      normalized_message: ctx.normalized,
+      extracted_entities: intent.entities,
+      selected_intent: intent.intent,
+      confidence: intent.confidence,
+      matched_rule: matchedRule(intent)
+    })
     logger.info('pipeline.detect', { messageId: ctx.messageId, intent: intent.intent, confidence: intent.confidence, ms })
     return intent
   } catch (err) {
@@ -95,6 +115,16 @@ async function stageAI(ctx, intent, text) {
       deterministic: intent
     })
     await pipelineLog.logAI(ctx.messageId, ai)
+    await logParserDetection({
+      user_id: ctx.userId,
+      message_id: ctx.messageId,
+      raw_message: ctx.rawMessage,
+      normalized_message: ctx.normalized,
+      extracted_entities: intent.entities,
+      selected_intent: ai.ai_intent || intent.intent,
+      confidence: ai.confidence ?? intent.confidence,
+      matched_rule: ai.success ? 'ai_fallback' : ai.failure_reason || 'ai_fallback'
+    })
     logger.info('pipeline.ai_fallback', { messageId: ctx.messageId, success: ai.success, reason: ai.failure_reason })
     if (ai.success && ai.ai_intent && Number(ai.confidence) >= THRESHOLD) {
       return { ...intent, intent: ai.ai_intent, confidence: Number(ai.confidence), rawText: intent.rawText || text, entities: intent.entities, source: 'ai' }
