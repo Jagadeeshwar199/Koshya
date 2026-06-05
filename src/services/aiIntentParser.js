@@ -11,7 +11,7 @@ function buildPrompt(rawMessage, normalized, deterministic) {
     'Classify this Koshya WhatsApp message into exactly one intent.',
     `Allowed intents: ${intents}`,
     'Reply with JSON only, no markdown:',
-    '{"intent":"<INTENT>","confidence":0.0-1.0,"reasoning":"short explanation"}',
+    '{"intent":"<INTENT>","confidence":0.0-1.0,"entities":{},"reasoning":"short explanation"}',
     '',
     `message: ${normalized || rawMessage}`,
     `deterministic_intent: ${deterministic?.intent || 'none'}`,
@@ -33,17 +33,28 @@ function failResult(prompt, reason, extra = {}) {
   }
 }
 
-function okResult(prompt, aiResponse, aiIntent, confidence, tokenUsage) {
+function okResult(prompt, aiResponse, aiIntent, confidence, tokenUsage, entities = {}) {
   return {
     model: MODEL,
     prompt_sent: prompt,
     ai_response: aiResponse,
     ai_intent: aiIntent,
+    entities,
     confidence,
     token_usage: tokenUsage,
     success: true,
     failure_reason: null
   }
+}
+
+function normalizeEntities(obj) {
+  const e = obj && typeof obj === 'object' ? obj : {}
+  const out = {}
+  if (e.serviceName || e.service) out.serviceName = e.serviceName || e.service
+  if (e.amount != null) out.amount = Number(e.amount)
+  if (e.actionText || e.title) out.actionText = e.actionText || e.title
+  if (e.date) out.date = e.date
+  return out
 }
 
 function parseJsonText(text) {
@@ -141,7 +152,8 @@ async function parseWithAI({ rawMessage, normalized, deterministic }) {
       mapped_unknown: aiIntent === INTENTS.UNKNOWN && parsed.intent !== INTENTS.UNKNOWN
     })
 
-    return { ...telemetry, ...okResult(prompt, text, aiIntent, confidence, extractUsage(response)) }
+    const entities = normalizeEntities(parsed.entities)
+    return { ...telemetry, ...okResult(prompt, text, aiIntent, confidence, extractUsage(response), entities) }
   } catch (err) {
     const reason = err.message === 'gemini_timeout' ? 'gemini_timeout' : 'gemini_request_failed'
     logger.error('ai_intent.failed', { reason, error: err.message, stack: err.stack })

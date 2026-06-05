@@ -113,11 +113,17 @@ function finalizeWeakDetection(det) {
 }
 
 async function applyAiFallback(ctx, det) {
+  const raw = ctx?.rawMessage || det.message
   const ai = await inferWithAI({
-    rawMessage: ctx?.rawMessage || det.message,
+    rawMessage: raw,
     normalized: ctx?.normalized || det.message,
     partial: { domain: det.domain, action: det.action, entities: det.entities }
   })
+  if (ctx?.messageId && ai.failure_reason !== 'ai_disabled') {
+    const { recordAIFallback } = require('../services/aiLearningService')
+    logger.info('AI_FALLBACK', { message: raw, prior: `${det.domain}:${det.action}` })
+    await recordAIFallback(ctx.messageId, raw, ai, { normalized_message: ctx?.normalized })
+  }
   if (!ai.success) {
     const weak = { ...det, decision: Decision.AI_FALLBACK, clarification: null, usedAI: true, aiMeta: ai }
     return finalizeWeakDetection(weak)

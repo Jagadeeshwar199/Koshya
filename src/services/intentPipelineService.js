@@ -13,7 +13,12 @@ const {
   Decision
 } = require('../detection/detectionEngine')
 const logger = require('../../utils/logger')
+const { recordAIFallback } = require('./aiLearningService')
 const { setOutboundCapture, clearOutboundCapture } = require('./whatsappService')
+
+function logRouting(event, payload) {
+  logger.info(event, payload)
+}
 
 const THRESHOLD = MIN_CONFIDENCE
 
@@ -105,6 +110,9 @@ async function stageDetectLegacy(ctx, text) {
     confidence: intent.confidence,
     matched_rule: matchedRule(intent)
   })
+  if (intent.confidence >= THRESHOLD && intent.intent !== 'UNKNOWN') {
+    logRouting('RULE_MATCH', { messageId: ctx.messageId, intent: intent.intent, confidence: intent.confidence })
+  }
   if (!useLegacyEngine()) {
     try {
       const shadow = require('../detection/shadowPipeline').runShadowDetection(text)
@@ -131,7 +139,14 @@ async function stageDetectPrimary(ctx, text) {
     confidence: det.score,
     matched_rule: det.decision
   })
-  if (det.aiMeta) await pipelineLog.logAI(ctx.messageId, { ...det.aiMeta, success: det.aiMeta.success })
+  if (!det.usedAI && det.intent?.intent) {
+    logRouting('RULE_MATCH', {
+      messageId: ctx.messageId,
+      intent: det.intent.intent,
+      winner: det.winner,
+      confidence: det.score
+    })
+  }
   ctx.lastDetection = det
   logger.info('pipeline.detect.primary', {
     messageId: ctx.messageId,
@@ -166,15 +181,28 @@ async function stageAI(ctx, intent, text) {
   ctx.stage = 'ai_fallback'
   if (intent.confidence >= THRESHOLD) return intent
   try {
+    logRouting('AI_FALLBACK', { messageId: ctx.messageId, prior_intent: intent.intent, prior_confidence: intent.confidence })
     const ai = await parseWithAI({
       rawMessage: ctx.rawMessage,
       normalized: ctx.normalized,
       deterministic: intent
     })
-    await pipelineLog.logAI(ctx.messageId, ai)
-    if (ai.success && ai.ai_intent && Number(ai.confidence) >= THRESHOLD) {
-      return { ...intent, intent: ai.ai_intent, confidence: Number(ai.confidence), rawText: intent.rawText || text, entities: intent.entities, source: 'ai' }
+    if (ai.failure_reason !== 'ai_disabled') {
+      await recordAIFallback(ctx.messageId, ctx.rawMessage, ai, { normalized_message: ctx.normalized })
     }
+    if (ai.success && ai.ai_intent && Number(ai.confidence) >= THRESHOLD) {
+      const merged = {
+        ...intent,
+        intent: ai.ai_intent,
+        confidence: Number(ai.confidence),
+        rawText: intent.rawText || text,
+        entities: { ...intent.entities, ...(ai.entities || {}) },
+        source: 'ai'
+      }
+      logRouting('FINAL_INTENT', { messageId: ctx.messageId, intent: merged.intent, source: 'ai' })
+      return merged
+    }
+    logRouting('FINAL_INTENT', { messageId: ctx.messageId, intent: intent.intent, source: 'rules' })
     return intent
   } catch (err) {
     await pipelineLog.logSystemError('ai_fallback', err, { messageId: ctx.messageId })
@@ -224,6 +252,7 @@ async function processClause(ctx, text, executeFn) {
         handleDetectionClarify(ctx.userId, det.intent, det.clarification)
       )
     }
+    logRouting('FINAL_INTENT', { messageId: ctx.messageId, intent: intent.intent, source: ctx.lastDetection?.usedAI ? 'ai' : 'rules' })
     const validation = await stageValidate(ctx, intent, text)
     if (!validation.passed) {
       return executeFn(intent, { validationFailed: true, validationError: validation.error })

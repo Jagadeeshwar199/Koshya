@@ -230,6 +230,7 @@ function parseAdminCommand(text) {
   if (cmd === 'parser routes') return 'routes'
   if (cmd === 'parser low-confidence' || cmd === 'parser low confidence') return 'low_confidence'
   if (cmd === 'detection stats' || cmd === 'parser detection stats') return 'detection_stats'
+  if (cmd === 'ai learning' || cmd === 'parser ai learning') return 'ai_learning'
   return null
 }
 
@@ -354,7 +355,8 @@ async function handleParserAdminCommand(sender, command) {
         'top_failed:',
         ...a.top_failed_messages.map((x) => `• ${x.message} (${x.count})`)
       ].join('\n')
-    }
+    },
+    ai_learning: () => require('./aiLearningService').buildAILearningAdminReport()
   }
   const body = await handlers[command]()
   await sendWhatsAppMessage(sender, body)

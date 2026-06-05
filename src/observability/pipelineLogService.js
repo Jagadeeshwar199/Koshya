@@ -54,16 +54,21 @@ async function logDetection(messageId, payload) {
 
 async function logAI(messageId, payload) {
   if (!messageId) return null
+  const usedAi = payload.used_ai === true
   return safeInsert('ai_detection_logs', {
     message_id: messageId,
-    raw_message: payload.raw_message ?? null,
+    message: payload.message ?? payload.raw_message ?? null,
+    intent: payload.intent ?? payload.ai_intent ?? null,
+    entities: payload.entities || payload.extracted_entities || {},
+    confidence: payload.confidence ?? payload.ai_confidence ?? null,
+    used_ai: usedAi,
+    raw_message: payload.raw_message ?? payload.message ?? null,
     normalized_message: payload.normalized_message ?? null,
     model: payload.model ?? null,
     prompt_sent: payload.prompt_sent || null,
     ai_response: payload.ai_response || null,
-    ai_intent: payload.ai_intent || null,
+    ai_intent: payload.ai_intent ?? payload.intent ?? null,
     ai_confidence: payload.ai_confidence ?? payload.confidence ?? null,
-    confidence: payload.confidence ?? null,
     token_usage: payload.token_usage || null,
     success: payload.success === true,
     error_message: payload.error_message ?? payload.failure_reason ?? null,
