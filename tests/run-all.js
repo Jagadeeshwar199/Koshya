@@ -12,6 +12,7 @@ const tests = [
   'tests/detection-engine.test.js',
   'tests/weak-intent-guard.test.js',
   'tests/ai-learning.test.js',
+  'tests/koshya-response-layer.test.js',
   'test:reminders',
   'test:reminder-title',
   'test:reminder-schedule',

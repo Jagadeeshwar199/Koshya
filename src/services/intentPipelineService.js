@@ -14,6 +14,24 @@ const {
 } = require('../detection/detectionEngine')
 const logger = require('../../utils/logger')
 const { setOutboundCapture, clearOutboundCapture, sendWhatsAppMessage } = require('./whatsappService')
+const { buildKoshyaResponse } = require('./koshyaResponseLayer')
+
+async function deliverKoshyaAiResponse(ctx, intent, det, execResult, validation) {
+  const geminiRaw = det?.geminiResponse || ctx.geminiResponse || null
+  const { text, geminiStored } = buildKoshyaResponse({
+    intent: intent.intent,
+    entities: intent.entities,
+    geminiRaw,
+    execResult,
+    validationOk: validation.passed && execResult?.ok !== false
+  })
+  ctx.geminiRawForLog = geminiStored
+  if (text && !execResult?.replySent) {
+    await sendWhatsAppMessage(ctx.userId, text)
+    ctx.capturedResponses = [...(ctx.capturedResponses || []), text]
+  }
+  ctx.koshyaResponseSent = text || ctx.capturedResponses?.[ctx.capturedResponses.length - 1] || null
+}
 
 function logRouting(event, payload) {
   logger.info(event, payload)
@@ -281,13 +299,11 @@ async function processClause(ctx, text, executeFn) {
     logRouting('FINAL_INTENT', { messageId: ctx.messageId, intent: intent.intent, source: ctx.lastDetection?.usedAI ? 'ai' : 'rules' })
     const validation = await stageValidate(ctx, intent, text)
     if (!validation.passed) {
+      if (det?.usedAI) await deliverKoshyaAiResponse(ctx, intent, det, { ok: false }, validation)
       return executeFn(intent, { validationFailed: true, validationError: validation.error })
     }
-    let result = await stageExecute(ctx, intent.intent, () => executeFn(intent, {}))
-    if (det?.geminiResponse) {
-      await sendWhatsAppMessage(ctx.userId, det.geminiResponse)
-      ctx.capturedResponses = [...(ctx.capturedResponses || []), det.geminiResponse]
-    }
+    const result = await stageExecute(ctx, intent.intent, () => executeFn(intent, {}))
+    if (det?.usedAI) await deliverKoshyaAiResponse(ctx, intent, det, result, validation)
     return result
   }
 
@@ -299,8 +315,7 @@ async function processClause(ctx, text, executeFn) {
   }
   const legacyResult = await stageExecute(ctx, intent.intent, () => executeFn(intent, {}))
   if (ctx.geminiResponse) {
-    await sendWhatsAppMessage(ctx.userId, ctx.geminiResponse)
-    ctx.capturedResponses = [...(ctx.capturedResponses || []), ctx.geminiResponse]
+    await deliverKoshyaAiResponse(ctx, intent, { usedAI: true, geminiResponse: ctx.geminiResponse }, legacyResult, validation)
   }
   return legacyResult
 }
@@ -329,9 +344,16 @@ async function runPipeline(userId, rawMessage, routeFn) {
       if (ctx.messageId && pl) {
         const { recordDetectionLearning } = require('./aiLearningService')
         await recordDetectionLearning(ctx.messageId, {
-          ...pl,
-          gemini_response: ctx.geminiResponse || ctx.lastDetection?.geminiResponse || pl.gemini_response,
-          response_sent: responseSent
+          message: pl.message || ctx.rawMessage,
+          intent: pl.final_intent || pl.intent,
+          entities: pl.entities || {},
+          used_ai: pl.used_ai === true,
+          gemini_response: ctx.geminiRawForLog || pl.gemini_response || null,
+          response_sent: ctx.koshyaResponseSent || responseSent,
+          rule_intent: pl.rule_intent,
+          rule_confidence: pl.rule_confidence,
+          confidence: pl.confidence,
+          normalized_message: pl.normalized_message
         })
       }
       await require('./parserTelemetryService').updateParserEventOutcome(ctx, result, allOut)

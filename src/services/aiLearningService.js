@@ -6,14 +6,15 @@ const EXAMPLE_LIMIT = 5
 
 async function recordDetectionLearning(messageId, row) {
   if (!messageId || !row?.message) return null
+  const intentVal = row.intent ?? row.final_intent
   const payload = {
     message: row.message,
-    rule_intent: row.rule_intent,
-    rule_confidence: row.rule_confidence,
-    final_intent: row.final_intent,
-    intent: row.final_intent,
+    rule_intent: row.rule_intent ?? null,
+    rule_confidence: row.rule_confidence ?? null,
+    final_intent: intentVal,
+    intent: intentVal,
     entities: row.entities || {},
-    confidence: row.confidence,
+    confidence: row.confidence ?? null,
     used_ai: row.used_ai === true,
     gemini_response: row.gemini_response ?? null,
     response_sent: row.response_sent ?? null,
