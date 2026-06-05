@@ -75,7 +75,9 @@ async function logAI(messageId, payload) {
     token_usage: payload.token_usage || null,
     success: payload.success === true,
     error_message: payload.error_message ?? payload.failure_reason ?? null,
-    failure_reason: payload.failure_reason || null
+    failure_reason: payload.failure_reason || null,
+    gemini_response: payload.gemini_response ?? null,
+    response_sent: payload.response_sent ?? null
   })
 }
 

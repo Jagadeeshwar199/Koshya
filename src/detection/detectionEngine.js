@@ -8,7 +8,7 @@ const { detectAction } = require('./actionDetector')
 const { extract } = require('./entityExtractor')
 const { planExecution } = require('./executionPlanner')
 const { Decision } = require('./types')
-const { inferWithAI } = require('./aiDomainParser')
+const { parseWithAI } = require('../services/aiIntentParser')
 const { toLegacyIntent } = require('./intentAdapter')
 const analytics = require('../services/detectionAnalyticsService')
 const {
@@ -115,41 +115,48 @@ function finalizeWeakDetection(det) {
 
 async function applyAiFallback(ctx, det) {
   const raw = ctx?.rawMessage || det.message
-  const ai = await inferWithAI({
+  const ruleIntent = detectionToIntent(det)
+  logger.info('AI_FALLBACK', { message: raw, rule_intent: ruleIntent.intent, rule_confidence: det.scorePercent })
+  const ai = await parseWithAI({
     rawMessage: raw,
     normalized: ctx?.normalized || det.message,
-    partial: { domain: det.domain, action: det.action, entities: det.entities }
+    deterministic: ruleIntent
   })
   if (!ai.success) {
-    const weak = { ...det, decision: Decision.AI_FALLBACK, clarification: null, usedAI: true, aiMeta: ai }
-    return finalizeWeakDetection(weak)
+    return finalizeWeakDetection({ ...det, decision: Decision.AI_FALLBACK, clarification: null, usedAI: true, aiMeta: ai })
   }
-
-  const lower = normalizeForIntentMatch(det.message)
-  let entities = enrichEntities(det.message, { ...det.entities, ...ai.entities }, lower)
-  const combined = Math.round(((ai.confidence + ai.confidence) / 2) * 1000) / 1000
-  const plan = planExecution(ai.domain, ai.action, entities, lower, {
-    domainScore: ai.confidence,
-    actionScore: ai.confidence,
-    combined
-  })
+  const intent = {
+    intent: ai.ai_intent,
+    confidence: Number(ai.confidence),
+    rawText: raw,
+    entities: { ...ruleIntent.entities, ...(ai.entities || {}) },
+    source: 'ai'
+  }
+  const confPct = Math.round(ai.confidence * 100)
   return {
     ...det,
-    domain: ai.domain,
-    action: ai.action,
-    domainScore: ai.confidence,
-    actionScore: ai.confidence,
-    score: combined,
-    winner: plan.winner || `${ai.domain}:${ai.action}`,
-    scorePercent: plan.score ?? Math.round(combined * 100),
-    entities,
-    plannerDecision: plan.decision,
-    decision: plan.decision,
-    clarification: plan.clarification,
-    missingFields: plan.missingFields,
-    canExecute: plan.decision === Decision.EXECUTE,
+    intent,
     usedAI: true,
-    aiMeta: ai
+    aiMeta: ai,
+    geminiResponse: ai.userResponse,
+    scorePercent: confPct,
+    decision: Decision.EXECUTE,
+    canExecute: true,
+    pendingLearning: {
+      message: raw,
+      rule_intent: ruleIntent.intent,
+      rule_confidence: det.scorePercent,
+      final_intent: intent.intent,
+      entities: intent.entities,
+      confidence: confPct,
+      used_ai: true,
+      normalized_message: ctx?.normalized,
+      model: ai.model,
+      prompt_sent: ai.prompt_sent,
+      ai_response: ai.ai_response,
+      token_usage: ai.token_usage,
+      gemini_response: ai.userResponse
+    }
   }
 }
 
@@ -192,44 +199,21 @@ async function detectAndPlan(rawMessage, ctx = null) {
 
   if (useRules) {
     det.intent = ruleIntent
-    if (ctx?.messageId) {
-      const { recordDetectionLearning } = require('../services/aiLearningService')
-      await recordDetectionLearning(ctx.messageId, {
-        message: msg,
-        rule_intent: ruleIntent.intent,
-        rule_confidence: ruleConf,
-        final_intent: ruleIntent.intent,
-        entities: ruleIntent.entities,
-        confidence: ruleConf,
-        used_ai: false,
-        normalized_message: ctx?.normalized
-      })
+    det.pendingLearning = {
+      message: msg,
+      rule_intent: ruleIntent.intent,
+      rule_confidence: ruleConf,
+      final_intent: ruleIntent.intent,
+      entities: ruleIntent.entities,
+      confidence: ruleConf,
+      used_ai: false,
+      normalized_message: ctx?.normalized
     }
   } else {
     analytics.recordAiFallback(det.message)
     det = finalizeWeakDetection(await applyAiFallback(ctx, det))
     if (det.decision === Decision.REJECTED_LOW_SCORE) det = logRejectedLowScore(det)
-    det.intent = detectionToIntent(det)
-    const g = det.aiMeta || {}
-    const finalConf = g.confidence != null ? Math.round(g.confidence * 100) : det.scorePercent
-    if (ctx?.messageId && g.failure_reason !== 'ai_disabled') {
-      const { recordDetectionLearning } = require('../services/aiLearningService')
-      await recordDetectionLearning(ctx.messageId, {
-        message: msg,
-        rule_intent: ruleIntent.intent,
-        rule_confidence: ruleConf,
-        final_intent: det.intent.intent,
-        entities: det.intent.entities,
-        confidence: finalConf,
-        used_ai: true,
-        normalized_message: ctx?.normalized,
-        model: g.model,
-        prompt_sent: g.prompt_sent,
-        ai_response: g.ai_response,
-        token_usage: g.token_usage,
-        failure_reason: g.failure_reason
-      })
-    }
+    if (!det.intent) det.intent = detectionToIntent(det)
   }
 
   if (!det.intent) det.intent = detectionToIntent(det)

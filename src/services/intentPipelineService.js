@@ -13,8 +13,7 @@ const {
   Decision
 } = require('../detection/detectionEngine')
 const logger = require('../../utils/logger')
-const { recordDetectionLearning } = require('./aiLearningService')
-const { setOutboundCapture, clearOutboundCapture } = require('./whatsappService')
+const { setOutboundCapture, clearOutboundCapture, sendWhatsAppMessage } = require('./whatsappService')
 
 function logRouting(event, payload) {
   logger.info(event, payload)
@@ -181,7 +180,7 @@ async function stageAI(ctx, intent, text) {
   ctx.stage = 'ai_fallback'
   const ruleConf = Math.round(intent.confidence * 100)
   if (ruleConf >= AI_THRESHOLD) {
-    await recordDetectionLearning(ctx.messageId, {
+    ctx.pendingLearning = {
       message: ctx.rawMessage,
       rule_intent: intent.intent,
       rule_confidence: ruleConf,
@@ -190,8 +189,8 @@ async function stageAI(ctx, intent, text) {
       confidence: ruleConf,
       used_ai: false,
       normalized_message: ctx.normalized
-    })
-    logRouting('FINAL_INTENT', { messageId: ctx.messageId, intent: intent.intent, source: 'rules' })
+    }
+    logRouting('RULE_MATCH', { messageId: ctx.messageId, intent: intent.intent, confidence: ruleConf })
     return intent
   }
   try {
@@ -212,24 +211,24 @@ async function stageAI(ctx, intent, text) {
             source: 'ai'
           }
         : intent
-    if (ai.failure_reason !== 'ai_disabled') {
-      await recordDetectionLearning(ctx.messageId, {
-        message: ctx.rawMessage,
-        rule_intent: intent.intent,
-        rule_confidence: ruleConf,
-        final_intent: merged.intent,
-        entities: merged.entities,
-        confidence: ai.success ? Math.round(Number(ai.confidence) * 100) : ruleConf,
-        used_ai: true,
-        normalized_message: ctx.normalized,
-        model: ai.model,
-        prompt_sent: ai.prompt_sent,
-        ai_response: ai.ai_response,
-        token_usage: ai.token_usage,
-        failure_reason: ai.failure_reason
-      })
+    ctx.geminiResponse = ai.userResponse
+    ctx.pendingLearning = {
+      message: ctx.rawMessage,
+      rule_intent: intent.intent,
+      rule_confidence: ruleConf,
+      final_intent: merged.intent,
+      entities: merged.entities,
+      confidence: ai.success ? Math.round(Number(ai.confidence) * 100) : ruleConf,
+      used_ai: true,
+      normalized_message: ctx.normalized,
+      model: ai.model,
+      prompt_sent: ai.prompt_sent,
+      ai_response: ai.ai_response,
+      token_usage: ai.token_usage,
+      gemini_response: ai.userResponse,
+      failure_reason: ai.failure_reason
     }
-    logRouting('FINAL_INTENT', { messageId: ctx.messageId, intent: merged.intent, source: merged.source || 'rules' })
+    logRouting('FINAL_INTENT', { messageId: ctx.messageId, intent: merged.intent, source: 'ai' })
     return merged
   } catch (err) {
     await pipelineLog.logSystemError('ai_fallback', err, { messageId: ctx.messageId })
@@ -284,7 +283,12 @@ async function processClause(ctx, text, executeFn) {
     if (!validation.passed) {
       return executeFn(intent, { validationFailed: true, validationError: validation.error })
     }
-    return stageExecute(ctx, intent.intent, () => executeFn(intent, {}))
+    let result = await stageExecute(ctx, intent.intent, () => executeFn(intent, {}))
+    if (det?.geminiResponse) {
+      await sendWhatsAppMessage(ctx.userId, det.geminiResponse)
+      ctx.capturedResponses = [...(ctx.capturedResponses || []), det.geminiResponse]
+    }
+    return result
   }
 
   let intent = await stageDetect(ctx, text)
@@ -293,7 +297,12 @@ async function processClause(ctx, text, executeFn) {
   if (!validation.passed) {
     return executeFn(intent, { validationFailed: true, validationError: validation.error })
   }
-  return stageExecute(ctx, intent.intent, () => executeFn(intent, {}))
+  const legacyResult = await stageExecute(ctx, intent.intent, () => executeFn(intent, {}))
+  if (ctx.geminiResponse) {
+    await sendWhatsAppMessage(ctx.userId, ctx.geminiResponse)
+    ctx.capturedResponses = [...(ctx.capturedResponses || []), ctx.geminiResponse]
+  }
+  return legacyResult
 }
 
 async function runPipeline(userId, rawMessage, routeFn) {
@@ -314,7 +323,18 @@ async function runPipeline(userId, rawMessage, routeFn) {
     throw err
   } finally {
     try {
-      await require('./parserTelemetryService').updateParserEventOutcome(ctx, result, responses)
+      const allOut = [...responses, ...(ctx.capturedResponses || [])]
+      const responseSent = allOut.length ? allOut[allOut.length - 1] : null
+      const pl = ctx.pendingLearning || ctx.lastDetection?.pendingLearning
+      if (ctx.messageId && pl) {
+        const { recordDetectionLearning } = require('./aiLearningService')
+        await recordDetectionLearning(ctx.messageId, {
+          ...pl,
+          gemini_response: ctx.geminiResponse || ctx.lastDetection?.geminiResponse || pl.gemini_response,
+          response_sent: responseSent
+        })
+      }
+      await require('./parserTelemetryService').updateParserEventOutcome(ctx, result, allOut)
     } catch (_) {}
     clearOutboundCapture?.()
   }

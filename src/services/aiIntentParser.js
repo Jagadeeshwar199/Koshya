@@ -11,7 +11,8 @@ function buildPrompt(rawMessage, normalized, deterministic) {
     'Classify this Koshya WhatsApp message into exactly one intent.',
     `Allowed intents: ${intents}`,
     'Reply with JSON only, no markdown:',
-    '{"intent":"<INTENT>","confidence":0.0-1.0,"entities":{},"reasoning":"short explanation"}',
+    '{"intent":"<INTENT>","confidence":0-100,"entities":{},"response":"WhatsApp reply for user","reasoning":"brief"}',
+    'confidence is 0-100. response: short confirmation the user should see (use ✓, newlines).',
     '',
     `message: ${normalized || rawMessage}`,
     `deterministic_intent: ${deterministic?.intent || 'none'}`,
@@ -33,7 +34,7 @@ function failResult(prompt, reason, extra = {}) {
   }
 }
 
-function okResult(prompt, aiResponse, aiIntent, confidence, tokenUsage, entities = {}) {
+function okResult(prompt, aiResponse, aiIntent, confidence, tokenUsage, entities = {}, userResponse = null) {
   return {
     model: MODEL,
     prompt_sent: prompt,
@@ -41,6 +42,7 @@ function okResult(prompt, aiResponse, aiIntent, confidence, tokenUsage, entities
     ai_intent: aiIntent,
     entities,
     confidence,
+    userResponse,
     token_usage: tokenUsage,
     success: true,
     failure_reason: null
@@ -54,7 +56,16 @@ function normalizeEntities(obj) {
   if (e.amount != null) out.amount = Number(e.amount)
   if (e.actionText || e.title) out.actionText = e.actionText || e.title
   if (e.date) out.date = e.date
+  if (e.task) out.actionText = out.actionText || e.task
+  if (e.time) out.time = e.time
+  if (e.recurrence) out.recurrence = e.recurrence
   return out
+}
+
+function normalizeConfidence(v) {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return 0
+  return n > 1 ? Math.min(100, n) / 100 : Math.min(1, Math.max(0, n))
 }
 
 function parseJsonText(text) {
@@ -140,10 +151,11 @@ async function parseWithAI({ rawMessage, normalized, deterministic }) {
     }
 
     const aiIntent = mapIntent(parsed.intent)
-    const confidence = Math.min(1, Math.max(0, Number(parsed.confidence)))
-    if (!Number.isFinite(confidence)) {
+    const confidence = normalizeConfidence(parsed.confidence)
+    if (!Number.isFinite(confidence) || confidence <= 0) {
       return { ...telemetry, ...failResult(prompt, 'invalid_confidence', { ai_response: text, ai_intent: aiIntent }) }
     }
+    const userResponse = String(parsed.response || '').trim() || null
 
     logger.info('ai_intent.classified', {
       ai_intent: aiIntent,
@@ -153,7 +165,7 @@ async function parseWithAI({ rawMessage, normalized, deterministic }) {
     })
 
     const entities = normalizeEntities(parsed.entities)
-    return { ...telemetry, ...okResult(prompt, text, aiIntent, confidence, extractUsage(response), entities) }
+    return { ...telemetry, ...okResult(prompt, text, aiIntent, confidence, extractUsage(response), entities, userResponse) }
   } catch (err) {
     const reason = err.message === 'gemini_timeout' ? 'gemini_timeout' : 'gemini_request_failed'
     logger.error('ai_intent.failed', { reason, error: err.message, stack: err.stack })

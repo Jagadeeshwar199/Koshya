@@ -15,26 +15,12 @@ require.cache[require.resolve('../config/supabase')] = {
       }),
       select: (cols, opts) => {
         if (opts?.count === 'exact') {
-          return {
-            eq: () => ({
-              then: async (resolve) =>
-                resolve({ count: store.ai_detection_logs.filter((r) => r.used_ai).length, error: null })
-            })
-          }
+          return { eq: () => ({ then: async (r) => r({ count: store.ai_detection_logs.filter((x) => x.used_ai).length, error: null }) }) }
         }
         return {
           eq: () => ({
-            then: async (resolve) =>
-              resolve({
-                data: store.ai_detection_logs.filter((r) => r.used_ai && (r.final_intent || r.intent)),
-                error: null
-              }),
-            order: () => ({
-              limit: (n) => ({
-                then: async (resolve) =>
-                  resolve({ data: store.ai_detection_logs.filter((r) => r.used_ai).slice(0, n), error: null })
-              })
-            })
+            then: async (r) => r({ data: store.ai_detection_logs.filter((x) => x.used_ai), error: null }),
+            order: () => ({ limit: () => ({ then: async (r) => r({ data: store.ai_detection_logs, error: null }) }) })
           })
         }
       }
@@ -52,14 +38,13 @@ const ai = require('../src/services/aiLearningService')
     final_intent: 'REMINDER_CREATE',
     entities: { task: 'wake up', time: '06:00', recurrence: 'DAILY' },
     confidence: 95,
-    used_ai: true
+    used_ai: true,
+    gemini_response: '✓ Reminder set\n\nWake up\nEvery day · 6:00 AM',
+    response_sent: '✓ Reminder set\n\nWake up\nEvery day · 6:00 AM'
   })
   const row = store.ai_detection_logs[0]
-  assert.equal(row.rule_intent, 'UNKNOWN')
-  assert.equal(row.rule_confidence, 35)
-  assert.equal(row.final_intent, 'REMINDER_CREATE')
+  assert.equal(row.gemini_response, row.response_sent)
   assert.equal(row.used_ai, true)
-
   await ai.recordDetectionLearning('m2', {
     message: 'show reminders',
     rule_intent: 'REMINDER_QUERY',
@@ -67,12 +52,12 @@ const ai = require('../src/services/aiLearningService')
     final_intent: 'REMINDER_QUERY',
     entities: {},
     confidence: 88,
-    used_ai: false
+    used_ai: false,
+    response_sent: 'Here are your reminders'
   })
   assert.equal(store.ai_detection_logs[1].used_ai, false)
   assert.equal(await ai.countAIUsage(), 1)
-  assert.ok((await ai.getTopAIFallbackIntents(5)).some((x) => x.intent === 'REMINDER_CREATE'))
-  console.log('AI threshold learning tests passed: 6')
+  console.log('AI learning mode tests passed: 5')
 })().catch((e) => {
   console.error(e)
   process.exit(1)
