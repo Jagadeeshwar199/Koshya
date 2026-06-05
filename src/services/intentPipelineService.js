@@ -6,14 +6,14 @@ const {
 const { parseWithAI } = require('./aiIntentParser')
 const { validateIntent } = require('./intentValidationService')
 const pipelineLog = require('../observability/pipelineLogService')
-const { isLegacyIntentEngineEnabled } = require('../config/constants')
+const { isLegacyIntentEngineEnabled, AI_THRESHOLD } = require('../config/constants')
 const {
   detectAndPlan,
   useLegacyEngine,
   Decision
 } = require('../detection/detectionEngine')
 const logger = require('../../utils/logger')
-const { recordAIFallback } = require('./aiLearningService')
+const { recordDetectionLearning } = require('./aiLearningService')
 const { setOutboundCapture, clearOutboundCapture } = require('./whatsappService')
 
 function logRouting(event, payload) {
@@ -179,31 +179,58 @@ async function stageDetect(ctx, text) {
 async function stageAI(ctx, intent, text) {
   if (!useLegacyEngine()) return intent
   ctx.stage = 'ai_fallback'
-  if (intent.confidence >= THRESHOLD) return intent
+  const ruleConf = Math.round(intent.confidence * 100)
+  if (ruleConf >= AI_THRESHOLD) {
+    await recordDetectionLearning(ctx.messageId, {
+      message: ctx.rawMessage,
+      rule_intent: intent.intent,
+      rule_confidence: ruleConf,
+      final_intent: intent.intent,
+      entities: intent.entities,
+      confidence: ruleConf,
+      used_ai: false,
+      normalized_message: ctx.normalized
+    })
+    logRouting('FINAL_INTENT', { messageId: ctx.messageId, intent: intent.intent, source: 'rules' })
+    return intent
+  }
   try {
-    logRouting('AI_FALLBACK', { messageId: ctx.messageId, prior_intent: intent.intent, prior_confidence: intent.confidence })
+    logRouting('AI_FALLBACK', { messageId: ctx.messageId, prior_intent: intent.intent, prior_confidence: ruleConf })
     const ai = await parseWithAI({
       rawMessage: ctx.rawMessage,
       normalized: ctx.normalized,
       deterministic: intent
     })
+    const merged =
+      ai.success && ai.ai_intent
+        ? {
+            ...intent,
+            intent: ai.ai_intent,
+            confidence: Number(ai.confidence),
+            rawText: intent.rawText || text,
+            entities: { ...intent.entities, ...(ai.entities || {}) },
+            source: 'ai'
+          }
+        : intent
     if (ai.failure_reason !== 'ai_disabled') {
-      await recordAIFallback(ctx.messageId, ctx.rawMessage, ai, { normalized_message: ctx.normalized })
+      await recordDetectionLearning(ctx.messageId, {
+        message: ctx.rawMessage,
+        rule_intent: intent.intent,
+        rule_confidence: ruleConf,
+        final_intent: merged.intent,
+        entities: merged.entities,
+        confidence: ai.success ? Math.round(Number(ai.confidence) * 100) : ruleConf,
+        used_ai: true,
+        normalized_message: ctx.normalized,
+        model: ai.model,
+        prompt_sent: ai.prompt_sent,
+        ai_response: ai.ai_response,
+        token_usage: ai.token_usage,
+        failure_reason: ai.failure_reason
+      })
     }
-    if (ai.success && ai.ai_intent && Number(ai.confidence) >= THRESHOLD) {
-      const merged = {
-        ...intent,
-        intent: ai.ai_intent,
-        confidence: Number(ai.confidence),
-        rawText: intent.rawText || text,
-        entities: { ...intent.entities, ...(ai.entities || {}) },
-        source: 'ai'
-      }
-      logRouting('FINAL_INTENT', { messageId: ctx.messageId, intent: merged.intent, source: 'ai' })
-      return merged
-    }
-    logRouting('FINAL_INTENT', { messageId: ctx.messageId, intent: intent.intent, source: 'rules' })
-    return intent
+    logRouting('FINAL_INTENT', { messageId: ctx.messageId, intent: merged.intent, source: merged.source || 'rules' })
+    return merged
   } catch (err) {
     await pipelineLog.logSystemError('ai_fallback', err, { messageId: ctx.messageId })
     return intent

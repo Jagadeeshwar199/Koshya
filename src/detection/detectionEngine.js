@@ -14,6 +14,7 @@ const analytics = require('../services/detectionAnalyticsService')
 const {
   isLegacyIntentEngineEnabled,
   MIN_INTENT_SCORE,
+  AI_THRESHOLD,
   isHelpIntentMessage
 } = require('../config/constants')
 const logger = require('../../utils/logger')
@@ -119,11 +120,6 @@ async function applyAiFallback(ctx, det) {
     normalized: ctx?.normalized || det.message,
     partial: { domain: det.domain, action: det.action, entities: det.entities }
   })
-  if (ctx?.messageId && ai.failure_reason !== 'ai_disabled') {
-    const { recordAIFallback } = require('../services/aiLearningService')
-    logger.info('AI_FALLBACK', { message: raw, prior: `${det.domain}:${det.action}` })
-    await recordAIFallback(ctx.messageId, raw, ai, { normalized_message: ctx?.normalized })
-  }
   if (!ai.success) {
     const weak = { ...det, decision: Decision.AI_FALLBACK, clarification: null, usedAI: true, aiMeta: ai }
     return finalizeWeakDetection(weak)
@@ -189,20 +185,60 @@ async function detectAndPlan(rawMessage, ctx = null) {
   }
 
   let det = finalizeWeakDetection(runDetection(rawMessage))
-  if (det.decision === Decision.REJECTED_LOW_SCORE) {
-    det = logRejectedLowScore(det)
-  } else if (det.decision === Decision.AI_FALLBACK) {
+  const ruleIntent = detectionToIntent(det)
+  const ruleConf = det.scorePercent
+  const msg = ctx?.rawMessage || rawMessage
+  const useRules = isHelpIntentMessage(det.message) || ruleConf >= AI_THRESHOLD
+
+  if (useRules) {
+    det.intent = ruleIntent
+    if (ctx?.messageId) {
+      const { recordDetectionLearning } = require('../services/aiLearningService')
+      await recordDetectionLearning(ctx.messageId, {
+        message: msg,
+        rule_intent: ruleIntent.intent,
+        rule_confidence: ruleConf,
+        final_intent: ruleIntent.intent,
+        entities: ruleIntent.entities,
+        confidence: ruleConf,
+        used_ai: false,
+        normalized_message: ctx?.normalized
+      })
+    }
+  } else {
     analytics.recordAiFallback(det.message)
     det = finalizeWeakDetection(await applyAiFallback(ctx, det))
     if (det.decision === Decision.REJECTED_LOW_SCORE) det = logRejectedLowScore(det)
+    det.intent = detectionToIntent(det)
+    const g = det.aiMeta || {}
+    const finalConf = g.confidence != null ? Math.round(g.confidence * 100) : det.scorePercent
+    if (ctx?.messageId && g.failure_reason !== 'ai_disabled') {
+      const { recordDetectionLearning } = require('../services/aiLearningService')
+      await recordDetectionLearning(ctx.messageId, {
+        message: msg,
+        rule_intent: ruleIntent.intent,
+        rule_confidence: ruleConf,
+        final_intent: det.intent.intent,
+        entities: det.intent.entities,
+        confidence: finalConf,
+        used_ai: true,
+        normalized_message: ctx?.normalized,
+        model: g.model,
+        prompt_sent: g.prompt_sent,
+        ai_response: g.ai_response,
+        token_usage: g.token_usage,
+        failure_reason: g.failure_reason
+      })
+    }
   }
+
+  if (!det.intent) det.intent = detectionToIntent(det)
   if (det.decision === Decision.CLARIFY && det.scorePercent >= MIN_INTENT_SCORE) {
     analytics.recordClarification(det.message)
   }
   if (det.decision === Decision.EXECUTE) analytics.recordExecution()
-
-  det.intent = detectionToIntent(det)
   if (det.intent.entities?.clarify === 'short') det.decision = Decision.EXECUTE
+  logger.info('FINAL_INTENT', { message: msg, intent: det.intent.intent, used_ai: det.usedAI === true, confidence: ruleConf })
   return det
 }
 

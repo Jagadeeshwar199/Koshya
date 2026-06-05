@@ -4,66 +4,75 @@ const assert = require('node:assert/strict')
 const store = { ai_detection_logs: [] }
 require.cache[require.resolve('../config/supabase')] = {
   exports: {
-    from: (table) => ({
+    from: () => ({
       insert: (row) => ({
         select: () => ({
           then: (resolve) => {
-            store[table].push({ id: '1', ...row })
+            store.ai_detection_logs.push({ id: '1', ...row })
             return resolve({ data: [{ id: '1' }], error: null })
           }
         })
       }),
-      select: () => ({
-        eq: () => ({
-          then: async (resolve) => resolve({ data: store.ai_detection_logs.filter((r) => r.used_ai && r.intent), error: null }),
-          order: () => ({
-            limit: (n) => ({
+      select: (cols, opts) => {
+        if (opts?.count === 'exact') {
+          return {
+            eq: () => ({
               then: async (resolve) =>
-                resolve({ data: store.ai_detection_logs.filter((r) => r.used_ai).slice(0, n), error: null })
+                resolve({ count: store.ai_detection_logs.filter((r) => r.used_ai).length, error: null })
+            })
+          }
+        }
+        return {
+          eq: () => ({
+            then: async (resolve) =>
+              resolve({
+                data: store.ai_detection_logs.filter((r) => r.used_ai && (r.final_intent || r.intent)),
+                error: null
+              }),
+            order: () => ({
+              limit: (n) => ({
+                then: async (resolve) =>
+                  resolve({ data: store.ai_detection_logs.filter((r) => r.used_ai).slice(0, n), error: null })
+              })
             })
           })
-        }),
-        order: () => ({
-          limit: (n) => ({
-            then: async (resolve) => resolve({ data: store.ai_detection_logs.slice(0, n), error: null })
-          })
-        })
-      })
+        }
+      }
     })
   }
 }
 
-const aiLearning = require('../src/services/aiLearningService')
+const ai = require('../src/services/aiLearningService')
 
 ;(async () => {
-  await aiLearning.recordAIFallback('mid-1', 'Wake me at 6 AM', {
-    success: true,
-    ai_intent: 'REMINDER_CREATE',
-    entities: { actionText: 'wake up' },
-    confidence: 0.91,
-    model: 'gemini-2.5-flash',
-    prompt_sent: 'p',
-    ai_response: '{}'
-  })
-  assert.equal(store.ai_detection_logs.length, 1)
-  const row = store.ai_detection_logs[0]
-  assert.equal(row.message, 'Wake me at 6 AM')
-  assert.equal(row.intent, 'REMINDER_CREATE')
-  assert.equal(row.used_ai, true)
-
-  store.ai_detection_logs.push({
-    message: 'Netflix monthly',
-    intent: 'SUBSCRIPTION_CREATE',
-    entities: { serviceName: 'Netflix' },
-    confidence: 0.88,
+  await ai.recordDetectionLearning('m1', {
+    message: 'Wake me up every day at 6 AM',
+    rule_intent: 'UNKNOWN',
+    rule_confidence: 35,
+    final_intent: 'REMINDER_CREATE',
+    entities: { task: 'wake up', time: '06:00', recurrence: 'DAILY' },
+    confidence: 95,
     used_ai: true
   })
+  const row = store.ai_detection_logs[0]
+  assert.equal(row.rule_intent, 'UNKNOWN')
+  assert.equal(row.rule_confidence, 35)
+  assert.equal(row.final_intent, 'REMINDER_CREATE')
+  assert.equal(row.used_ai, true)
 
-  const counts = await aiLearning.getAIFallbackCountByIntent()
-  assert.ok(counts.some((c) => c.intent === 'REMINDER_CREATE'))
-  assert.ok((await aiLearning.getTopAIFallbackIntents(2)).length >= 1)
-  assert.ok((await aiLearning.getRecentAIFallbackMessages(10)).length >= 1)
-  console.log('AI learning tests passed: 5')
+  await ai.recordDetectionLearning('m2', {
+    message: 'show reminders',
+    rule_intent: 'REMINDER_QUERY',
+    rule_confidence: 88,
+    final_intent: 'REMINDER_QUERY',
+    entities: {},
+    confidence: 88,
+    used_ai: false
+  })
+  assert.equal(store.ai_detection_logs[1].used_ai, false)
+  assert.equal(await ai.countAIUsage(), 1)
+  assert.ok((await ai.getTopAIFallbackIntents(5)).some((x) => x.intent === 'REMINDER_CREATE'))
+  console.log('AI threshold learning tests passed: 6')
 })().catch((e) => {
   console.error(e)
   process.exit(1)

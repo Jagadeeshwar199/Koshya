@@ -3,6 +3,7 @@ const MIN_DOMAIN_SCORE = Number(process.env.MIN_DOMAIN_SCORE || 0.45)
 const MIN_ACTION_SCORE = Number(process.env.MIN_ACTION_SCORE || 0.45)
 const AI_FALLBACK_THRESHOLD = Number(process.env.AI_FALLBACK_THRESHOLD || 0.45)
 const MIN_INTENT_SCORE = Number(process.env.MIN_INTENT_SCORE || 25)
+const AI_THRESHOLD = Number(process.env.AI_THRESHOLD || 80)
 
 function isHelpIntentMessage(text) {
   const t = String(text || '').trim()
@@ -25,6 +26,7 @@ module.exports = {
   MIN_ACTION_SCORE,
   AI_FALLBACK_THRESHOLD,
   MIN_INTENT_SCORE,
+  AI_THRESHOLD,
   isHelpIntentMessage,
   isChitchatMessage,
   isLegacyIntentEngineEnabled

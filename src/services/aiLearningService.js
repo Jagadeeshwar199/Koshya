@@ -6,103 +6,112 @@ const logger = require('../../utils/logger')
 const EXAMPLE_LIMIT = 5
 
 function domainActionToIntent(domain, action, entities, message, confidence) {
-  const legacy = toLegacyIntent({
-    domain,
-    action,
-    entities: entities || {},
-    message,
-    score: confidence,
-    usedAI: true
-  })
+  const legacy = toLegacyIntent({ domain, action, entities: entities || {}, message, score: confidence, usedAI: true })
   return { intent: legacy.intent, entities: legacy.entities }
 }
 
-function normalizeGeminiResult(rawMessage, gemini) {
+function normalizeGemini(gemini, rawMessage) {
   if (gemini.ai_intent) {
     return {
-      intent: gemini.ai_intent,
+      final_intent: gemini.ai_intent,
       entities: gemini.entities || {},
-      confidence: gemini.ai_confidence ?? gemini.confidence
+      confidence: Math.round((gemini.ai_confidence ?? gemini.confidence ?? 0) * 100)
     }
   }
   if (gemini.domain && gemini.action) {
-    const mapped = domainActionToIntent(
-      gemini.domain,
-      gemini.action,
-      gemini.entities,
-      rawMessage,
-      gemini.confidence
-    )
-    return { intent: mapped.intent, entities: mapped.entities, confidence: gemini.confidence }
+    const m = domainActionToIntent(gemini.domain, gemini.action, gemini.entities, rawMessage, gemini.confidence)
+    return { final_intent: m.intent, entities: m.entities, confidence: Math.round((gemini.confidence || 0) * 100) }
   }
-  return { intent: null, entities: {}, confidence: gemini.confidence ?? null }
+  return { final_intent: null, entities: {}, confidence: null }
+}
+
+async function recordDetectionLearning(messageId, row) {
+  if (!messageId || !row?.message) return null
+  const payload = {
+    message: row.message,
+    rule_intent: row.rule_intent,
+    rule_confidence: row.rule_confidence,
+    final_intent: row.final_intent,
+    intent: row.final_intent,
+    entities: row.entities || {},
+    confidence: row.confidence,
+    used_ai: row.used_ai === true,
+    raw_message: row.message,
+    normalized_message: row.normalized_message ?? row.message,
+    success: !!row.final_intent,
+    model: row.model ?? null,
+    prompt_sent: row.prompt_sent ?? null,
+    ai_response: row.ai_response ?? null,
+    ai_intent: row.final_intent,
+    ai_confidence: row.confidence != null ? row.confidence / 100 : null,
+    token_usage: row.token_usage ?? null,
+    failure_reason: row.failure_reason ?? null
+  }
+  const id = await pipelineLog.logAI(messageId, payload)
+  logger.info(row.used_ai ? 'AI_FALLBACK' : 'RULE_MATCH', {
+    message_id: messageId,
+    message: row.message,
+    rule_intent: row.rule_intent,
+    rule_confidence: row.rule_confidence,
+    final_intent: row.final_intent,
+    confidence: row.confidence,
+    used_ai: row.used_ai
+  })
+  return { id, ...payload }
 }
 
 async function recordAIFallback(messageId, rawMessage, geminiResult, extra = {}) {
-  if (!messageId || !geminiResult) return null
-  if (geminiResult.failure_reason === 'ai_disabled' || geminiResult.failure_reason === 'missing_gemini_api_key') {
+  if (geminiResult?.failure_reason === 'ai_disabled' || geminiResult?.failure_reason === 'missing_gemini_api_key') {
     return null
   }
-  const mapped = normalizeGeminiResult(rawMessage, geminiResult)
-  const row = {
+  const g = normalizeGemini(geminiResult, rawMessage)
+  return recordDetectionLearning(messageId, {
     message: rawMessage,
-    intent: mapped.intent,
-    entities: mapped.entities,
-    confidence: mapped.confidence,
+    rule_intent: extra.rule_intent ?? 'UNKNOWN',
+    rule_confidence: extra.rule_confidence ?? 0,
+    final_intent: g.final_intent,
+    entities: g.entities,
+    confidence: g.confidence,
     used_ai: true,
-    raw_message: rawMessage,
-    normalized_message: extra.normalized_message ?? rawMessage,
-    model: geminiResult.model ?? null,
-    prompt_sent: geminiResult.prompt_sent ?? null,
-    ai_response: geminiResult.ai_response ?? null,
-    ai_intent: mapped.intent,
-    ai_confidence: mapped.confidence,
-    token_usage: geminiResult.token_usage ?? null,
-    success: geminiResult.success === true && !!mapped.intent,
-    failure_reason: geminiResult.failure_reason ?? null,
-    error_message: geminiResult.error_message ?? null
-  }
-  const id = await pipelineLog.logAI(messageId, row)
-  logger.info('AI_FALLBACK', {
-    message_id: messageId,
-    message: rawMessage,
-    intent: mapped.intent,
-    confidence: mapped.confidence,
-    success: row.success
+    normalized_message: extra.normalized_message,
+    model: geminiResult.model,
+    prompt_sent: geminiResult.prompt_sent,
+    ai_response: geminiResult.ai_response,
+    token_usage: geminiResult.token_usage,
+    failure_reason: geminiResult.failure_reason
   })
-  return { id, ...row }
 }
 
-async function queryLearningRows() {
-  const { data, error } = await supabase
+async function countAIUsage() {
+  const { count, error } = await supabase
     .from('ai_detection_logs')
-    .select('message, intent, entities, confidence, created_at')
+    .select('*', { count: 'exact', head: true })
     .eq('used_ai', true)
   if (error) throw error
-  return (data || []).filter((r) => r.intent)
+  return count || 0
 }
 
-async function getAIFallbackCountByIntent() {
-  const rows = await queryLearningRows()
+async function getTopAIFallbackIntents(limit = 10) {
+  const { data, error } = await supabase
+    .from('ai_detection_logs')
+    .select('final_intent')
+    .eq('used_ai', true)
+  if (error) throw error
   const counts = {}
-  for (const r of rows) {
-    const k = r.intent || 'UNKNOWN'
+  for (const r of data || []) {
+    const k = r.final_intent || r.intent || 'UNKNOWN'
     counts[k] = (counts[k] || 0) + 1
   }
   return Object.entries(counts)
     .map(([intent, count]) => ({ intent, count }))
     .sort((a, b) => b.count - a.count)
-}
-
-async function getTopAIFallbackIntents(limit = 10) {
-  const all = await getAIFallbackCountByIntent()
-  return all.slice(0, limit)
+    .slice(0, limit)
 }
 
 async function getRecentAIFallbackMessages(limit = 50) {
   const { data, error } = await supabase
     .from('ai_detection_logs')
-    .select('message, intent, entities, confidence, created_at')
+    .select('message, rule_intent, rule_confidence, final_intent, entities, confidence, used_ai, created_at')
     .eq('used_ai', true)
     .order('created_at', { ascending: false })
     .limit(limit)
@@ -110,32 +119,34 @@ async function getRecentAIFallbackMessages(limit = 50) {
   return data || []
 }
 
-async function buildAILearningAdminReport() {
-  const byIntent = await getAIFallbackCountByIntent()
-  const lines = ['🧠 AI Learning Loop (collect only — no auto-rules)']
-  if (!byIntent.length) return `${lines[0]}\n(none yet)`
+async function getAIFallbackCountByIntent() {
+  return getTopAIFallbackIntents(100)
+}
 
+async function buildAILearningAdminReport() {
+  const byIntent = await getTopAIFallbackIntents(20)
+  const lines = ['🧠 AI threshold learning (collect only)', `AI calls: ${await countAIUsage()}`]
+  if (!byIntent.length) return `${lines.join('\n')}\n(none yet)`
   for (const { intent, count } of byIntent) {
     const { data } = await supabase
       .from('ai_detection_logs')
       .select('message')
       .eq('used_ai', true)
-      .eq('intent', intent)
+      .eq('final_intent', intent)
       .order('created_at', { ascending: false })
       .limit(EXAMPLE_LIMIT)
     lines.push('', `${intent} (${count})`)
-    for (const row of data || []) {
-      lines.push(`• ${String(row.message || '').slice(0, 120)}`)
-    }
+    for (const row of data || []) lines.push(`• ${String(row.message || '').slice(0, 120)}`)
   }
   return lines.join('\n')
 }
 
 module.exports = {
+  recordDetectionLearning,
   recordAIFallback,
+  countAIUsage,
   getTopAIFallbackIntents,
   getRecentAIFallbackMessages,
   getAIFallbackCountByIntent,
-  buildAILearningAdminReport,
-  domainActionToIntent
+  buildAILearningAdminReport
 }
