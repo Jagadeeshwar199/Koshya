@@ -12,6 +12,7 @@ const {
 } = require('./pendingSubscriptionService')
 const { sendWhatsAppMessage } = require('./whatsappService')
 const { formatSubscriptionAdded } = require('../formatters/subscriptionFormatter')
+const { setLastEntity } = require('./entityContextService')
 const logger = require('../../utils/logger')
 
 function buildQuestions(missing) {
@@ -49,6 +50,7 @@ async function saveAndReply(sender, parsed) {
     })
 
     await clearPending(sender)
+    await setLastEntity(sender, 'subscription', subscription.id)
     const reply = await sendWhatsAppMessage(sender, formatSaved(parsed))
 
     if (!reply.success) {

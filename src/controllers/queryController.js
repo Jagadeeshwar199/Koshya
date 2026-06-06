@@ -17,6 +17,7 @@ const { matchSubscriptionsByService } = require('../utils/serviceMatcher')
 const { computeNextRenewalDate } = require('../services/reminderService')
 const { sendWhatsAppMessage } = require('../services/whatsappService')
 const { setState } = require('../services/conversationStateService')
+const { getLastEntity, clearDialogueState } = require('../services/entityContextService')
 const {
   formatSubscription,
   formatSubscriptionOption,
@@ -131,6 +132,18 @@ Netflix renews on 27th every month - 149`
 }
 
 async function handleSubscriptionUpdateIntent(sender, intent) {
+  const renewalDay =
+    intent.entities?.renewalDay ||
+    (intent.entities?.date?.day ? Number(intent.entities.date.day) : null)
+  const lastId = intent.lastEntityId || (await getLastEntity(sender))?.id
+
+  if (lastId && renewalDay) {
+    const updated = await updateSubscription(lastId, { renewalDay })
+    await clearDialogueState(sender)
+    const reply = await sendWhatsAppMessage(sender, formatSubscriptionUpdated(updated))
+    return { ok: true, intent: intent.intent, subscription: updated, replySent: reply.success }
+  }
+
   const { serviceName, amount } = intent.entities
 
   if (!serviceName) {

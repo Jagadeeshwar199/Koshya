@@ -7,6 +7,7 @@ const {
 const {
   generateReminders,
   createReminderFromIntent,
+  updateReminderFromIntent,
   updateLatestReminderFromIntent,
   cancelReminderFromIntent,
   getPendingReminders,
@@ -16,7 +17,8 @@ const {
   dedupeReminders
 } = require('../services/reminderService')
 const { sendWhatsAppMessage } = require('../services/whatsappService')
-const { setState, clearState } = require('../services/conversationStateService')
+const { setState } = require('../services/conversationStateService')
+const { getLastEntity, setLastEntity, clearDialogueState } = require('../services/entityContextService')
 const { PAGE_SIZE } = require('./paginationController')
 const { formatReminderConfirmation,
   formatReminderUpdateConfirmation,
@@ -95,6 +97,7 @@ async function handleReminderCreateIntent(sender, text, intent) {
     message: text,
     entities: intent.entities
   })
+  await setLastEntity(sender, 'reminder', reminder.id)
 
   const reply = await sendWhatsAppMessage(
     sender,
@@ -107,6 +110,18 @@ async function handleReminderCreateIntent(sender, text, intent) {
     reminder,
     replySent: reply.success
   }
+}
+
+async function updateReminderForSender(sender, intent, entities) {
+  const lastId = intent.lastEntityId || (await getLastEntity(sender))?.id
+  if (lastId) {
+    return updateReminderFromIntent({
+      userPhone: sender,
+      reminderId: lastId,
+      entities
+    })
+  }
+  return updateLatestReminderFromIntent({ userPhone: sender, entities })
 }
 
 async function handleReminderUpdateIntent(sender, intent) {
@@ -125,10 +140,7 @@ async function handleReminderUpdateIntent(sender, intent) {
     }
   }
 
-  const reminder = await updateLatestReminderFromIntent({
-    userPhone: sender,
-    entities: intent.entities
-  })
+  const reminder = await updateReminderForSender(sender, intent, intent.entities)
 
   if (!reminder) {
     const reply = await sendWhatsAppMessage(
@@ -144,7 +156,7 @@ async function handleReminderUpdateIntent(sender, intent) {
     }
   }
 
-  await clearState(sender)
+  await clearDialogueState(sender)
   const reply = await sendWhatsAppMessage(
     sender,
     formatReminderUpdateConfirmation(reminder)
@@ -159,13 +171,10 @@ async function handleReminderUpdateIntent(sender, intent) {
 }
 
 async function handleReminderTimeFollowUp(sender, dateEntity) {
-  const reminder = await updateLatestReminderFromIntent({
-    userPhone: sender,
-    entities: { date: dateEntity }
-  })
+  const reminder = await updateReminderForSender(sender, {}, { date: dateEntity })
 
   if (!reminder) {
-    await clearState(sender)
+    await clearDialogueState(sender)
     const reply = await sendWhatsAppMessage(
       sender,
       `I couldn't find an active reminder to update.`
@@ -173,7 +182,7 @@ async function handleReminderTimeFollowUp(sender, dateEntity) {
     return { ok: true, intent: 'REMINDER_RESCHEDULE', reminder: null, replySent: reply.success }
   }
 
-  await clearState(sender)
+  await clearDialogueState(sender)
   const reply = await sendWhatsAppMessage(
     sender,
     formatReminderUpdateConfirmation(reminder)
@@ -206,7 +215,7 @@ async function handleReminderCreateTimeFollowUp(sender, draftMessage, timeText, 
     return { ok: true, intent: 'REMINDER_CREATE', reminder: null, replySent: reply.success }
   }
 
-  await clearState(sender)
+  await clearDialogueState(sender)
   return handleReminderCreateIntent(sender, draftMessage, {
     ...draftIntent,
     entities

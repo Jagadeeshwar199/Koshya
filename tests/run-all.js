@@ -25,6 +25,7 @@ const tests = [
   'test:reminder-confirmation',
   'test:reminder-query',
   'test:reminder-update',
+  'tests/entity-update-inplace.test.js',
   'test:day13',
   'test:webhook-auth',
   'test:ux',

@@ -35,6 +35,7 @@ const {
 const intentPipeline = require('./intentPipelineService')
 const { useLegacyEngine, splitClauses } = require('../detection/detectionEngine')
 const { detectAndPlan } = require('../detection/detectionEngine')
+const { coerceIntentForLastEntity } = require('./entityUpdateCoercion')
 async function resolveIntent(ctx, text) {
   if (useLegacyEngine()) {
     return ctx ? intentPipeline.stageDetect(ctx, text) : detectIntent(text)
@@ -56,6 +57,8 @@ async function routeDetectedIntent(sender, text, intent, options = {}, meta = {}
     return handleClarifyIntent(sender, intent)
   }
 
+  intent = await coerceIntentForLastEntity(sender, intent, text)
+
   if (intent.entities.clarify === 'short') {
     return handleUnknownIntent(sender, intent, text)
   }
@@ -67,7 +70,9 @@ async function routeDetectedIntent(sender, text, intent, options = {}, meta = {}
     intent.intent !== INTENTS.REMINDER_CREATE &&
     intent.intent !== INTENTS.SUBSCRIPTION_DELETE &&
     intent.intent !== INTENTS.REMINDER_RESCHEDULE &&
+    intent.intent !== INTENTS.REMINDER_UPDATE &&
     intent.intent !== INTENTS.REMINDER_CANCEL &&
+    intent.intent !== INTENTS.SUBSCRIPTION_UPDATE &&
     intent.intent !== INTENTS.SUBSCRIPTION_EXPIRY
   ) {
     return handleClarifyIntent(sender, intent)

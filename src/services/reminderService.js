@@ -588,14 +588,26 @@ async function getLatestActiveReminder(userPhone) {
 
 async function updateLatestReminderFromIntent({ userPhone, entities = {} }) {
   const reminder = await getLatestActiveReminder(userPhone)
+  if (!reminder) return null
+  return updateReminderFromIntent({ userPhone, reminderId: reminder.id, entities })
+}
 
-  if (!reminder) {
-    return null
+async function updateReminderFromIntent({ userPhone, reminderId, entities = {} }) {
+  const id = validateId(reminderId)
+  const { data: row, error: fetchErr } = await supabase
+    .from('reminders')
+    .select('*')
+    .eq('id', id)
+    .eq('user_phone', userPhone)
+    .eq('status', 'pending')
+    .maybeSingle()
+
+  if (fetchErr) {
+    throw new ApiError(502, 'failed to fetch reminder', formatSupabaseError(fetchErr))
   }
+  if (!row) return null
 
-  const existingTriggerAt = reminder.triggerAt
-    ? new Date(reminder.triggerAt)
-    : new Date()
+  const existingTriggerAt = row.trigger_at ? new Date(row.trigger_at) : new Date()
   const triggerAt = resolveTriggerAt(entities.date, existingTriggerAt)
 
   const { data, error } = await supabase
@@ -604,7 +616,7 @@ async function updateLatestReminderFromIntent({ userPhone, entities = {} }) {
       trigger_at: triggerAt.toISOString(),
       updated_at: new Date().toISOString()
     })
-    .eq('id', reminder.id)
+    .eq('id', id)
     .select('*')
     .maybeSingle()
 
@@ -858,6 +870,7 @@ async function markReminderSent(id) {
 module.exports = {
   generateReminders,
   createReminderFromIntent,
+  updateReminderFromIntent,
   updateLatestReminderFromIntent,
   cancelReminderFromIntent,
   getPendingReminders,
