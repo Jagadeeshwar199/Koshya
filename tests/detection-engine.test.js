@@ -35,8 +35,7 @@ async function run() {
   assert.equal(r6.intent.intent, INTENTS.SUBSCRIPTION_QUERY)
 
   const amb = runDetection('Netflix')
-  assert.equal(amb.decision, Decision.CLARIFY)
-  assert.ok(amb.clarification)
+  assert.equal(amb.decision, Decision.AI_FALLBACK)
 
   process.env.AI_INTENT_ENABLED = 'false'
   const unk = await detectAndPlan('xyzzy qwerty')

@@ -6,7 +6,8 @@ const {
 const { parseWithAI } = require('./aiIntentParser')
 const { validateIntent } = require('./intentValidationService')
 const pipelineLog = require('../observability/pipelineLogService')
-const { isLegacyIntentEngineEnabled, AI_THRESHOLD } = require('../config/constants')
+const { isLegacyIntentEngineEnabled } = require('../config/constants')
+const { isLegacyRuleExecutable, RouteSource } = require('../detection/intentRouting')
 const {
   detectAndPlan,
   useLegacyEngine,
@@ -199,7 +200,8 @@ async function stageAI(ctx, intent, text) {
   if (!useLegacyEngine()) return intent
   ctx.stage = 'ai_fallback'
   const ruleConf = Math.round(intent.confidence * 100)
-  if (ruleConf >= AI_THRESHOLD) {
+  if (isLegacyRuleExecutable(intent, text)) {
+    ctx.route_source = RouteSource.RULE
     ctx.pendingLearning = {
       message: ctx.rawMessage,
       rule_intent: intent.intent,
@@ -232,6 +234,7 @@ async function stageAI(ctx, intent, text) {
           }
         : intent
     ctx.geminiResponse = ai.userResponse
+    ctx.route_source = ai.success && ai.ai_intent && ai.ai_intent !== 'UNKNOWN' ? RouteSource.GEMINI : RouteSource.UNKNOWN
     ctx.pendingLearning = {
       message: ctx.rawMessage,
       rule_intent: intent.intent,
@@ -304,7 +307,7 @@ async function processClause(ctx, text, executeFn) {
       return executeFn(intent, { validationFailed: true, validationError: validation.error })
     }
     const result = await stageExecute(ctx, intent.intent, () => executeFn(intent, {}))
-    if (det?.usedAI) await deliverKoshyaAiResponse(ctx, intent, det, result, validation)
+    if (det?.usedAI || det?.route_source === RouteSource.GEMINI) await deliverKoshyaAiResponse(ctx, intent, det, result, validation)
     return result
   }
 

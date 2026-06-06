@@ -40,9 +40,7 @@ const TEST_HELP = ['Hi', 'Hello', 'Thanks', 'What can you do?', 'Good morning']
     assert.equal(`${det.domain}:${det.action}`, 'GENERAL:HELP', msg)
   }
   const weak = await detectAndPlan('hm')
-  assert.equal(weak.decision, Decision.REJECTED_LOW_SCORE)
-  assert.equal(weak.rejectionLog?.decision, Decision.REJECTED_LOW_SCORE)
-  assert.equal(weak.rejectionLog?.score, 20)
+  assert.equal(weak.route_source, 'UNKNOWN')
   console.log(`Weak intent guard tests passed: ${HELP_MSGS.length + 1}`)
 })().catch((e) => {
   console.error(e)

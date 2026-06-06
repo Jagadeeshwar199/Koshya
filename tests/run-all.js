@@ -13,6 +13,7 @@ const tests = [
   'tests/weak-intent-guard.test.js',
   'tests/ai-learning.test.js',
   'tests/koshya-response-layer.test.js',
+  'tests/intent-route-source.test.js',
   'tests/send-reply-once.test.js',
   'test:reminders',
   'test:reminder-title',

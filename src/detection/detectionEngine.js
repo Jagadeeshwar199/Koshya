@@ -1,6 +1,5 @@
 /**
- * Primary detection: Message → Domain → Action → Entities → Planner.
- * EXTENSION: register detectors in runDetection(); never execute from AI.
+ * Primary detection: Message → Domain → Action → Entities → Planner → RULE | GEMINI | UNKNOWN
  */
 const { normalizeText, applyTypoFixes, normalizeForIntentMatch } = require('../utils/textUtils')
 const { detectDomain } = require('./domainDetector')
@@ -10,13 +9,9 @@ const { planExecution } = require('./executionPlanner')
 const { Decision } = require('./types')
 const { parseWithAI } = require('../services/aiIntentParser')
 const { toLegacyIntent } = require('./intentAdapter')
+const { RouteSource, isRuleExecutable } = require('./intentRouting')
 const analytics = require('../services/detectionAnalyticsService')
-const {
-  isLegacyIntentEngineEnabled,
-  MIN_INTENT_SCORE,
-  AI_THRESHOLD,
-  isHelpIntentMessage
-} = require('../config/constants')
+const { isLegacyIntentEngineEnabled, isHelpIntentMessage } = require('../config/constants')
 const logger = require('../../utils/logger')
 const intentDetector = require('../intent/intentDetector')
 const { Domain, Action } = require('./types')
@@ -31,7 +26,6 @@ function runDetection(rawMessage) {
   const message = normalizeText(applyTypoFixes(rawMessage))
   const lower = normalizeForIntentMatch(message)
   const reasons = []
-
   let entities = enrichEntities(message, extract(message), lower)
   const d = detectDomain(lower, entities)
   reasons.push(...d.reasons)
@@ -44,10 +38,7 @@ function runDetection(rawMessage) {
     combined
   })
   reasons.push(...plan.reasons)
-
-  const winner = plan.winner || `${d.domain}:${a.action}`
   const scorePercent = plan.score ?? Math.round(combined * 100)
-
   return {
     message,
     domain: d.domain,
@@ -55,7 +46,7 @@ function runDetection(rawMessage) {
     domainScore: d.score,
     actionScore: a.score,
     score: combined,
-    winner,
+    winner: plan.winner || `${d.domain}:${a.action}`,
     scorePercent,
     entities,
     reasons,
@@ -68,62 +59,46 @@ function runDetection(rawMessage) {
   }
 }
 
-function lowScoreRejectionPayload(det) {
-  return {
-    message: det.message,
-    winner: det.winner,
-    score: det.scorePercent,
-    decision: Decision.REJECTED_LOW_SCORE
-  }
-}
-
-function logRejectedLowScore(det) {
-  const payload = lowScoreRejectionPayload(det)
-  logger.info('detection.rejected_low_score', payload)
-  det.rejectionLog = payload
-  return det
-}
-
-function finalizeWeakDetection(det) {
-  logger.info('detection.winner', {
-    winner: det.winner,
-    score: det.scorePercent,
-    decision: det.decision,
-    planner_decision: det.plannerDecision,
-    used_ai: det.usedAI === true,
-    can_execute: det.canExecute === true,
-    message: det.message
-  })
-  if (isHelpIntentMessage(det.message)) {
-    det.domain = Domain.GENERAL
-    det.action = Action.HELP
-    det.decision = Decision.EXECUTE
-    det.clarification = null
-    det.winner = 'GENERAL:HELP'
-    det.scorePercent = 99
-    det.canExecute = true
-    det.reasons.push('help_intent_routed')
-    return det
-  }
-  if (det.scorePercent >= MIN_INTENT_SCORE) return det
-  det.decision = Decision.REJECTED_LOW_SCORE
-  det.clarification = null
-  det.canExecute = false
-  det.reasons.push(`weak_score_guard:${det.scorePercent}`)
-  return logRejectedLowScore(det)
-}
-
 async function applyAiFallback(ctx, det) {
   const raw = ctx?.rawMessage || det.message
   const ruleIntent = detectionToIntent(det)
-  logger.info('AI_FALLBACK', { message: raw, rule_intent: ruleIntent.intent, rule_confidence: det.scorePercent })
+  const { INTENTS } = require('../services/intentService')
+  logger.info('AI_FALLBACK', { message: raw, rule_intent: ruleIntent.intent })
   const ai = await parseWithAI({
     rawMessage: raw,
     normalized: ctx?.normalized || det.message,
     deterministic: ruleIntent
   })
-  if (!ai.success) {
-    return finalizeWeakDetection({ ...det, decision: Decision.AI_FALLBACK, clarification: null, usedAI: true, aiMeta: ai })
+  const confPct = ai.success ? Math.round(Number(ai.confidence) * 100) : det.scorePercent
+  const baseLearning = {
+    message: raw,
+    rule_intent: ruleIntent.intent,
+    rule_confidence: det.scorePercent,
+    normalized_message: ctx?.normalized,
+    model: ai.model,
+    prompt_sent: ai.prompt_sent,
+    ai_response: ai.ai_response,
+    token_usage: ai.token_usage,
+    gemini_response: ai.userResponse
+  }
+  if (!ai.success || !ai.ai_intent || ai.ai_intent === INTENTS.UNKNOWN) {
+    return {
+      ...det,
+      route_source: RouteSource.UNKNOWN,
+      intent: { intent: INTENTS.UNKNOWN, confidence: 0, rawText: raw, entities: ruleIntent.entities || {} },
+      usedAI: true,
+      aiMeta: ai,
+      decision: Decision.AI_FALLBACK,
+      canExecute: false,
+      pendingLearning: {
+        ...baseLearning,
+        final_intent: INTENTS.UNKNOWN,
+        entities: ruleIntent.entities,
+        confidence: det.scorePercent,
+        used_ai: true,
+        failure_reason: ai.failure_reason
+      }
+    }
   }
   const intent = {
     intent: ai.ai_intent,
@@ -132,9 +107,9 @@ async function applyAiFallback(ctx, det) {
     entities: { ...ruleIntent.entities, ...(ai.entities || {}) },
     source: 'ai'
   }
-  const confPct = Math.round(ai.confidence * 100)
   return {
     ...det,
+    route_source: RouteSource.GEMINI,
     intent,
     usedAI: true,
     aiMeta: ai,
@@ -143,19 +118,11 @@ async function applyAiFallback(ctx, det) {
     decision: Decision.EXECUTE,
     canExecute: true,
     pendingLearning: {
-      message: raw,
-      rule_intent: ruleIntent.intent,
-      rule_confidence: det.scorePercent,
+      ...baseLearning,
       final_intent: intent.intent,
       entities: intent.entities,
       confidence: confPct,
-      used_ai: true,
-      normalized_message: ctx?.normalized,
-      model: ai.model,
-      prompt_sent: ai.prompt_sent,
-      ai_response: ai.ai_response,
-      token_usage: ai.token_usage,
-      gemini_response: ai.userResponse
+      used_ai: true
     }
   }
 }
@@ -172,10 +139,20 @@ function dialogueIntent(message) {
   return null
 }
 
+function applyHelpFastPath(det) {
+  if (!isHelpIntentMessage(det.message)) return det
+  det.domain = Domain.GENERAL
+  det.action = Action.HELP
+  det.decision = Decision.EXECUTE
+  det.winner = 'GENERAL:HELP'
+  det.canExecute = true
+  return det
+}
+
 async function detectAndPlan(rawMessage, ctx = null) {
+  const { INTENTS } = require('../services/intentService')
   const dialogue = dialogueIntent(rawMessage)
   if (dialogue) {
-    const { INTENTS } = require('../services/intentService')
     const intent = dialogue === 'CONFIRM' ? INTENTS.CONFIRM : dialogue === 'CANCEL' ? INTENTS.CANCEL : INTENTS.LIST_MORE
     const det = {
       message: rawMessage,
@@ -184,45 +161,46 @@ async function detectAndPlan(rawMessage, ctx = null) {
       score: 0.99,
       entities: {},
       decision: Decision.EXECUTE,
-      usedAI: false
+      usedAI: false,
+      route_source: RouteSource.RULE
     }
     det.intent = { intent, confidence: 0.99, rawText: rawMessage, entities: {} }
     analytics.recordExecution()
     return det
   }
 
-  let det = finalizeWeakDetection(runDetection(rawMessage))
-  const ruleIntent = detectionToIntent(det)
-  const ruleConf = det.scorePercent
   const msg = ctx?.rawMessage || rawMessage
-  const useRules = isHelpIntentMessage(det.message) || ruleConf >= AI_THRESHOLD
+  let det = applyHelpFastPath(runDetection(rawMessage))
+  const ruleIntent = detectionToIntent(det)
 
-  if (useRules) {
+  if (isRuleExecutable(det, ruleIntent)) {
+    det.route_source = RouteSource.RULE
     det.intent = ruleIntent
+    det.usedAI = false
     det.pendingLearning = {
       message: msg,
       rule_intent: ruleIntent.intent,
-      rule_confidence: ruleConf,
+      rule_confidence: det.scorePercent,
       final_intent: ruleIntent.intent,
       entities: ruleIntent.entities,
-      confidence: ruleConf,
+      confidence: det.scorePercent,
       used_ai: false,
       normalized_message: ctx?.normalized
     }
+    analytics.recordExecution()
   } else {
     analytics.recordAiFallback(det.message)
-    det = finalizeWeakDetection(await applyAiFallback(ctx, det))
-    if (det.decision === Decision.REJECTED_LOW_SCORE) det = logRejectedLowScore(det)
-    if (!det.intent) det.intent = detectionToIntent(det)
+    det = await applyAiFallback(ctx, det)
+    if (det.route_source === RouteSource.GEMINI) analytics.recordExecution()
   }
 
   if (!det.intent) det.intent = detectionToIntent(det)
-  if (det.decision === Decision.CLARIFY && det.scorePercent >= MIN_INTENT_SCORE) {
-    analytics.recordClarification(det.message)
-  }
-  if (det.decision === Decision.EXECUTE) analytics.recordExecution()
-  if (det.intent.entities?.clarify === 'short') det.decision = Decision.EXECUTE
-  logger.info('FINAL_INTENT', { message: msg, intent: det.intent.intent, used_ai: det.usedAI === true, confidence: ruleConf })
+  logger.info('FINAL_INTENT', {
+    message: msg,
+    intent: det.intent.intent,
+    route_source: det.route_source,
+    used_ai: det.usedAI === true
+  })
   return det
 }
 
@@ -242,5 +220,6 @@ module.exports = {
   applyAiFallback,
   splitClauses,
   useLegacyEngine,
-  Decision
+  Decision,
+  RouteSource
 }

@@ -1,15 +1,8 @@
 /**
- * executionPlanner — EXECUTE | CLARIFY | AI_FALLBACK. EXTENSION: domain-specific rules.
+ * executionPlanner — EXECUTE when rule-complete, else AI_FALLBACK (Gemini). No score threshold.
  */
 const { Domain, Action, Decision } = require('./types')
-const {
-  MIN_DOMAIN_SCORE,
-  MIN_ACTION_SCORE,
-  AI_FALLBACK_THRESHOLD,
-  MIN_INTENT_SCORE,
-  isHelpIntentMessage
-} = require('../config/constants')
-const { buildClarification } = require('./clarification')
+const { isHelpIntentMessage } = require('../config/constants')
 
 function missingFor(domain, action, entities, lower = '') {
   const missingFields = []
@@ -38,89 +31,27 @@ function missingFor(domain, action, entities, lower = '') {
 
 function planExecution(domain, action, entities, lower, scores) {
   const reasons = [`plan:${domain}+${action}`]
-  const domainScore = scores.domainScore
-  const actionScore = scores.actionScore
   const combined = scores.combined
   const scorePct = Math.round(combined * 100)
   const winner = `${domain}:${action}`
+  const base = { missingFields: [], clarification: null, winner, score: scorePct }
 
   if (isHelpIntentMessage(lower)) {
-    return {
-      decision: Decision.EXECUTE,
-      missingFields: [],
-      clarification: null,
-      reasons: [...reasons, 'help_intent'],
-      winner: 'GENERAL:HELP',
-      score: scorePct
-    }
+    return { decision: Decision.EXECUTE, reasons: [...reasons, 'help_intent'], winner: 'GENERAL:HELP', score: 95, ...base }
   }
-  if (scorePct < MIN_INTENT_SCORE) {
-    return {
-      decision: Decision.REJECTED_LOW_SCORE,
-      missingFields: [],
-      clarification: null,
-      reasons: [...reasons, `weak_intent_score:${scorePct}`],
-      winner,
-      score: scorePct
-    }
+  if (domain === Domain.UNKNOWN || action === Action.UNKNOWN) {
+    return { decision: Decision.AI_FALLBACK, reasons: [...reasons, 'unknown_domain_or_action'], ...base }
   }
-
-  if (domain !== Domain.UNKNOWN && action === Action.UNKNOWN) {
-    return {
-      decision: Decision.CLARIFY,
-      missingFields: ['action'],
-      clarification: buildClarification(domain, action, entities, ['action']),
-      reasons: [...reasons, 'unknown_action']
-    }
-  }
-  if (
-    domain === Domain.UNKNOWN ||
-    domainScore < MIN_DOMAIN_SCORE ||
-    actionScore < MIN_ACTION_SCORE ||
-    combined < AI_FALLBACK_THRESHOLD
-  ) {
-    return {
-      decision: Decision.AI_FALLBACK,
-      missingFields: missingFor(domain, action, entities, lower),
-      clarification: null,
-      reasons: [...reasons, 'low_scores_or_unknown']
-    }
-  }
-
   const missingFields = missingFor(domain, action, entities, lower)
   if (missingFields.length) {
-    const isWorkflow = domain === Domain.REMINDER || domain === Domain.SUBSCRIPTION
-    if (isWorkflow && scorePct < MIN_INTENT_SCORE) {
-      return {
-        decision: Decision.REJECTED_LOW_SCORE,
-        missingFields: [],
-        clarification: null,
-        reasons: [...reasons, 'weak_no_clarify'],
-        winner,
-        score: scorePct
-      }
-    }
-    return {
-      decision: Decision.CLARIFY,
-      missingFields,
-      clarification: buildClarification(domain, action, entities, missingFields),
-      reasons: [...reasons, 'missing_entities'],
-      winner,
-      score: scorePct
-    }
+    return { decision: Decision.AI_FALLBACK, missingFields, reasons: [...reasons, 'missing_entities'], ...base }
   }
-
-  return { decision: Decision.EXECUTE, missingFields: [], clarification: null, reasons, winner, score: scorePct }
+  return { decision: Decision.EXECUTE, reasons, ...base }
 }
 
-/** @deprecated use planExecution */
 function plan(domain, action, entities) {
   const p = planExecution(domain, action, entities, '', { domainScore: 1, actionScore: 1, combined: 1 })
-  return {
-    canExecute: p.decision === Decision.EXECUTE,
-    missingFields: p.missingFields,
-    reasons: p.reasons
-  }
+  return { canExecute: p.decision === Decision.EXECUTE, missingFields: p.missingFields, reasons: p.reasons }
 }
 
-module.exports = { planExecution, plan, Decision }
+module.exports = { planExecution, plan, Decision, missingFor }
