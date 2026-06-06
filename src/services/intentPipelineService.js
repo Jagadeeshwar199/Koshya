@@ -13,7 +13,7 @@ const {
   Decision
 } = require('../detection/detectionEngine')
 const logger = require('../../utils/logger')
-const { setOutboundCapture, clearOutboundCapture, sendWhatsAppMessage } = require('./whatsappService')
+const { setOutboundCapture, clearOutboundCapture, sendWhatsAppMessage, setActiveReplyMessageId, clearActiveReplyMessageId } = require('./whatsappService')
 const { buildKoshyaResponse } = require('./koshyaResponseLayer')
 
 async function deliverKoshyaAiResponse(ctx, intent, det, execResult, validation) {
@@ -27,10 +27,12 @@ async function deliverKoshyaAiResponse(ctx, intent, det, execResult, validation)
   })
   ctx.geminiRawForLog = geminiStored
   if (text && !execResult?.replySent) {
-    await sendWhatsAppMessage(ctx.userId, text)
-    ctx.capturedResponses = [...(ctx.capturedResponses || []), text]
+    const reply = await sendWhatsAppMessage(ctx.userId, text)
+    if (reply.success && !reply.duplicateBlocked) {
+      ctx.capturedResponses = [...(ctx.capturedResponses || []), text]
+    }
   }
-  ctx.koshyaResponseSent = text || ctx.capturedResponses?.[ctx.capturedResponses.length - 1] || null
+  ctx.koshyaResponseSent = ctx.capturedResponses?.[ctx.capturedResponses.length - 1] || text || null
 }
 
 function logRouting(event, payload) {
@@ -299,7 +301,6 @@ async function processClause(ctx, text, executeFn) {
     logRouting('FINAL_INTENT', { messageId: ctx.messageId, intent: intent.intent, source: ctx.lastDetection?.usedAI ? 'ai' : 'rules' })
     const validation = await stageValidate(ctx, intent, text)
     if (!validation.passed) {
-      if (det?.usedAI) await deliverKoshyaAiResponse(ctx, intent, det, { ok: false }, validation)
       return executeFn(intent, { validationFailed: true, validationError: validation.error })
     }
     const result = await stageExecute(ctx, intent.intent, () => executeFn(intent, {}))
@@ -327,6 +328,7 @@ async function runPipeline(userId, rawMessage, routeFn) {
   let result
   try {
     await stageNormalize(ctx)
+    setActiveReplyMessageId(ctx.messageId)
     result = await routeFn(ctx)
     return result
   } catch (err) {
@@ -359,6 +361,7 @@ async function runPipeline(userId, rawMessage, routeFn) {
       await require('./parserTelemetryService').updateParserEventOutcome(ctx, result, allOut)
     } catch (_) {}
     clearOutboundCapture?.()
+    clearActiveReplyMessageId()
   }
 }
 
