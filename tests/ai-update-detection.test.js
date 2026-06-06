@@ -14,15 +14,16 @@ const conversationState = {
   last_entity_time: 'Tomorrow · 7:00 AM'
 }
 
-const { buildPrompt, parseWithAI } = require('../src/services/aiIntentParser')
+const { buildPrompt } = require('../src/services/aiIntentParser')
 const { attachLastEntityId } = require('../src/services/entityContextService')
 const { INTENTS } = require('../src/services/intentService')
 
 const prompt = buildPrompt('sorry 6 AM', 'sorry 6 am', { intent: 'UNKNOWN' }, conversationState)
-assert.match(prompt, /conversation_state/)
-assert.match(prompt, /sorry, actually, instead, change, move, or make it/i)
-assert.match(prompt, /REMINDER_RESCHEDULE/)
-assert.match(prompt, /123/)
+assert.match(prompt, /last_entity_id: 123/)
+assert.match(prompt, /last_entity_type: reminder/)
+assert.match(prompt, /last_entity_title: Exercise/)
+assert.match(prompt, /last_entity_time: Tomorrow · 7:00 AM/)
+assert.match(prompt, /UPDATE_REMINDER/)
 
 assert.equal(
   attachLastEntityId({ intent: INTENTS.REMINDER_RESCHEDULE, entities: {} }, conversationState).lastEntityId,
@@ -33,17 +34,20 @@ let captured = null
 require.cache[require.resolve('../src/services/aiIntentParser')] = {
   exports: {
     buildPrompt,
+    MODEL: 'gemini-2.5-flash',
     parseWithAI: async (args) => {
       captured = args
+      const promptSent = buildPrompt(args.rawMessage, args.normalized, args.deterministic, args.conversationState)
       return {
         success: true,
         ai_intent: INTENTS.REMINDER_RESCHEDULE,
+        raw_ai_intent: 'UPDATE_REMINDER',
         confidence: 0.91,
         entities: {},
         userResponse: '✓ Updated',
         model: 'gemini-2.5-flash',
-        prompt_sent: 'p',
-        ai_response: '{}'
+        prompt_sent: promptSent,
+        ai_response: '{"intent":"UPDATE_REMINDER"}'
       }
     }
   }
@@ -68,6 +72,10 @@ const { RouteSource } = require('../src/detection/intentRouting')
     assert.equal(det.route_source, RouteSource.GEMINI, msg)
     assert.equal(det.intent.intent, INTENTS.REMINDER_RESCHEDULE, msg)
     assert.equal(det.intent.lastEntityId, '123', msg)
+    assert.equal(det.pendingLearning.ai_intent, 'UPDATE_REMINDER', msg)
+    assert.ok(String(det.pendingLearning.prompt_sent || '').includes('last_entity_id: 123'), msg)
+    assert.equal(det.pendingLearning.model, 'gemini-2.5-flash', msg)
+    assert.ok(det.pendingLearning.ai_response, msg)
   }
 
   assert.ok(captured?.conversationState)

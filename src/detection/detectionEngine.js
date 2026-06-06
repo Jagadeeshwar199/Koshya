@@ -86,6 +86,7 @@ async function applyAiFallback(ctx, det) {
     model: ai.model,
     prompt_sent: ai.prompt_sent,
     ai_response: ai.ai_response,
+    ai_intent: ai.raw_ai_intent || ai.ai_intent,
     token_usage: ai.token_usage,
     gemini_response: ai.userResponse
   }

@@ -4,9 +4,23 @@ const logger = require('../../utils/logger')
 
 const EXAMPLE_LIMIT = 5
 
+function assertAiLearningRow(messageId, row) {
+  if (row.used_ai !== true) return
+  const prompt = String(row.prompt_sent || '').trim()
+  const model = String(row.model || '').trim()
+  if (!prompt || !model) {
+    logger.error('ai_learning.used_ai_missing_prompt', {
+      message_id: messageId,
+      prompt_sent: row.prompt_sent,
+      model: row.model
+    })
+  }
+}
+
 async function recordDetectionLearning(messageId, row) {
   if (!messageId || !row?.message) return null
-  const intentVal = row.intent ?? row.final_intent
+  assertAiLearningRow(messageId, row)
+  const intentVal = row.final_intent ?? row.intent
   const payload = {
     message: row.message,
     rule_intent: row.rule_intent ?? null,
@@ -20,11 +34,11 @@ async function recordDetectionLearning(messageId, row) {
     response_sent: row.response_sent ?? null,
     raw_message: row.message,
     normalized_message: row.normalized_message ?? row.message,
-    success: !!row.final_intent,
+    success: !!intentVal,
     model: row.model ?? null,
     prompt_sent: row.prompt_sent ?? null,
     ai_response: row.ai_response ?? null,
-    ai_intent: row.final_intent,
+    ai_intent: row.ai_intent ?? null,
     ai_confidence: row.confidence != null ? row.confidence / 100 : null,
     token_usage: row.token_usage ?? null,
     failure_reason: row.failure_reason ?? null
@@ -35,8 +49,10 @@ async function recordDetectionLearning(messageId, row) {
     used_ai: row.used_ai,
     rule_intent: row.rule_intent,
     final_intent: row.final_intent,
+    ai_intent: row.ai_intent,
     confidence: row.confidence,
-    has_response: !!(row.response_sent || row.gemini_response)
+    has_response: !!(row.response_sent || row.gemini_response),
+    has_prompt: !!String(row.prompt_sent || '').trim()
   })
   return id
 }
@@ -99,6 +115,7 @@ async function buildAILearningAdminReport() {
 
 module.exports = {
   recordDetectionLearning,
+  assertAiLearningRow,
   countAIUsage,
   getTopAIFallbackIntents,
   getRecentAIFallbackMessages,

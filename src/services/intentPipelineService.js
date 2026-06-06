@@ -168,6 +168,7 @@ async function stageDetectPrimary(ctx, text) {
     })
   }
   ctx.lastDetection = det
+  if (det.pendingLearning) ctx.pendingLearning = det.pendingLearning
   logger.info('pipeline.detect.primary', {
     messageId: ctx.messageId,
     domain: det.domain,
@@ -258,6 +259,7 @@ async function stageAI(ctx, intent, text) {
       model: ai.model,
       prompt_sent: ai.prompt_sent,
       ai_response: ai.ai_response,
+      ai_intent: ai.raw_ai_intent || ai.ai_intent,
       token_usage: ai.token_usage,
       gemini_response: ai.userResponse,
       failure_reason: ai.failure_reason
@@ -361,6 +363,7 @@ async function runPipeline(userId, rawMessage, routeFn) {
         const { recordDetectionLearning } = require('./aiLearningService')
         await recordDetectionLearning(ctx.messageId, {
           message: pl.message || ctx.rawMessage,
+          final_intent: pl.final_intent || pl.intent,
           intent: pl.final_intent || pl.intent,
           entities: pl.entities || {},
           used_ai: pl.used_ai === true,
@@ -369,7 +372,13 @@ async function runPipeline(userId, rawMessage, routeFn) {
           rule_intent: pl.rule_intent,
           rule_confidence: pl.rule_confidence,
           confidence: pl.confidence,
-          normalized_message: pl.normalized_message
+          normalized_message: pl.normalized_message,
+          model: pl.model,
+          prompt_sent: pl.prompt_sent,
+          ai_response: pl.ai_response,
+          ai_intent: pl.ai_intent,
+          token_usage: pl.token_usage,
+          failure_reason: pl.failure_reason
         })
       }
       await require('./parserTelemetryService').updateParserEventOutcome(ctx, result, allOut)

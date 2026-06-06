@@ -7,33 +7,41 @@ const INTENT_SET = new Set(Object.values(INTENTS))
 
 function buildPrompt(rawMessage, normalized, deterministic, conversationState) {
   const intents = Object.values(INTENTS).join(', ')
+  const cs = conversationState || {}
   const lines = [
     'Classify this Koshya WhatsApp message into exactly one intent.',
-    `Allowed intents: ${intents}, UPDATE_REMINDER (same as REMINDER_RESCHEDULE), UPDATE_SUBSCRIPTION (same as SUBSCRIPTION_UPDATE)`,
+    `Allowed intents: ${intents}, UPDATE_REMINDER, UPDATE_SUBSCRIPTION`,
     'Reply with JSON only, no markdown:',
     '{"intent":"<INTENT>","confidence":0-100,"entities":{},"response":"WhatsApp reply for user","reasoning":"brief"}',
     'confidence is 0-100. response: short confirmation the user should see (use ✓, newlines).',
     '',
-    `message: ${normalized || rawMessage}`,
+    `message: ${normalized || rawMessage}`
+  ]
+  if (cs.last_entity_type) {
+    lines.push(`last_entity_id: ${cs.last_entity_id ?? ''}`)
+    lines.push(`last_entity_type: ${cs.last_entity_type ?? ''}`)
+    lines.push(`last_entity_title: ${cs.last_entity_title ?? ''}`)
+    lines.push(`last_entity_time: ${cs.last_entity_time ?? ''}`)
+    lines.push(
+      'If last_entity_type is set AND the message starts with sorry, actually, instead, change, move, or make it (case insensitive), return intent UPDATE_REMINDER for reminder or UPDATE_SUBSCRIPTION for subscription. Use last_entity_id as target. Never CREATE a new row.'
+    )
+  }
+  lines.push(
     `deterministic_intent: ${deterministic?.intent || 'none'}`,
     `deterministic_confidence: ${deterministic?.confidence ?? 'none'}`,
     `entities: ${JSON.stringify(deterministic?.entities || {})}`
-  ]
-  if (conversationState?.last_entity_type) {
-    lines.push(`conversation_state: ${JSON.stringify(conversationState)}`)
-    lines.push(
-      'If conversation_state.last_entity_type is set AND the message starts with sorry, actually, instead, change, move, or make it (case insensitive), treat as UPDATE of that entity — REMINDER_RESCHEDULE for reminder, SUBSCRIPTION_UPDATE for subscription. Target id is conversation_state.last_entity_id. Never CREATE a new row.'
-    )
-  }
+  )
   return lines.join('\n')
 }
 
 function failResult(prompt, reason, extra = {}) {
+  assertPromptBuilt(prompt)
   return {
     model: MODEL,
     prompt_sent: prompt,
     ai_response: extra.ai_response ?? null,
     ai_intent: extra.ai_intent ?? null,
+    raw_ai_intent: extra.raw_ai_intent ?? extra.ai_intent ?? null,
     confidence: extra.confidence ?? null,
     token_usage: extra.token_usage ?? null,
     success: false,
@@ -41,18 +49,27 @@ function failResult(prompt, reason, extra = {}) {
   }
 }
 
-function okResult(prompt, aiResponse, aiIntent, confidence, tokenUsage, entities = {}, userResponse = null) {
+function okResult(prompt, aiResponse, aiIntent, confidence, tokenUsage, entities = {}, userResponse = null, rawAiIntent = null) {
+  assertPromptBuilt(prompt)
   return {
     model: MODEL,
     prompt_sent: prompt,
     ai_response: aiResponse,
     ai_intent: aiIntent,
+    raw_ai_intent: rawAiIntent || aiIntent,
     entities,
     confidence,
     userResponse,
     token_usage: tokenUsage,
     success: true,
     failure_reason: null
+  }
+}
+
+function assertPromptBuilt(prompt) {
+  if (!String(prompt || '').trim()) {
+    logger.error('ai_intent.empty_prompt', {})
+    throw new Error('ai_prompt_empty')
   }
 }
 
@@ -159,10 +176,14 @@ async function parseWithAI({ rawMessage, normalized, deterministic, conversation
       return { ...telemetry, ...failResult(prompt, 'invalid_json_response', { ai_response: text }) }
     }
 
-    const aiIntent = mapIntent(parsed.intent)
+    const rawAiIntent = String(parsed.intent || '').trim().toUpperCase()
+    const aiIntent = mapIntent(rawAiIntent)
     const confidence = normalizeConfidence(parsed.confidence)
     if (!Number.isFinite(confidence) || confidence <= 0) {
-      return { ...telemetry, ...failResult(prompt, 'invalid_confidence', { ai_response: text, ai_intent: aiIntent }) }
+      return {
+        ...telemetry,
+        ...failResult(prompt, 'invalid_confidence', { ai_response: text, ai_intent: aiIntent, raw_ai_intent: rawAiIntent })
+      }
     }
     const userResponse = String(parsed.response || '').trim() || null
 
@@ -174,7 +195,10 @@ async function parseWithAI({ rawMessage, normalized, deterministic, conversation
     })
 
     const entities = normalizeEntities(parsed.entities)
-    return { ...telemetry, ...okResult(prompt, text, aiIntent, confidence, extractUsage(response), entities, userResponse) }
+    return {
+      ...telemetry,
+      ...okResult(prompt, text, aiIntent, confidence, extractUsage(response), entities, userResponse, rawAiIntent)
+    }
   } catch (err) {
     const reason = err.message === 'gemini_timeout' ? 'gemini_timeout' : 'gemini_request_failed'
     logger.error('ai_intent.failed', { reason, error: err.message, stack: err.stack })
@@ -185,4 +209,4 @@ async function parseWithAI({ rawMessage, normalized, deterministic, conversation
   }
 }
 
-module.exports = { parseWithAI, buildPrompt }
+module.exports = { parseWithAI, buildPrompt, assertPromptBuilt, MODEL }
