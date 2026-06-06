@@ -50,7 +50,11 @@ async function saveAndReply(sender, parsed) {
     })
 
     await clearPending(sender)
-    await setLastEntity(sender, 'subscription', subscription.id)
+    await setLastEntity(sender, 'subscription', subscription.id, {
+      action: 'CREATE',
+      title: parsed.serviceName,
+      time: parsed.renewalDay ? `${parsed.renewalDay}th` : null
+    })
     const reply = await sendWhatsAppMessage(sender, formatSaved(parsed))
 
     if (!reply.success) {

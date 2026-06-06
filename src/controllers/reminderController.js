@@ -14,7 +14,8 @@ const {
   getUserReminders,
   markReminderSent,
   resolveTriggerAt,
-  dedupeReminders
+  dedupeReminders,
+  unpackReminderMessage
 } = require('../services/reminderService')
 const { sendWhatsAppMessage } = require('../services/whatsappService')
 const { setState } = require('../services/conversationStateService')
@@ -25,7 +26,8 @@ const { formatReminderConfirmation,
   formatReminderCancelConfirmation,
   formatManualReminderSummary,
   formatReminderOption,
-  reminderMatchesDate
+  reminderMatchesDate,
+  formatReminderTime
 } = require('../formatters/reminderFormatter')
 
 async function generate(req, res, next) {
@@ -97,7 +99,13 @@ async function handleReminderCreateIntent(sender, text, intent) {
     message: text,
     entities: intent.entities
   })
-  await setLastEntity(sender, 'reminder', reminder.id)
+  const { title } = unpackReminderMessage(reminder.message)
+  const { dateLabel, timeLabel } = formatReminderTime(reminder.triggerAt)
+  await setLastEntity(sender, 'reminder', reminder.id, {
+    action: 'CREATE',
+    title,
+    time: timeLabel ? `${dateLabel} · ${timeLabel}` : dateLabel
+  })
 
   const reply = await sendWhatsAppMessage(
     sender,

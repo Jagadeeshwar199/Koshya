@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 process.env.ENABLE_LEGACY_INTENT_ENGINE = 'false'
 process.env.AI_INTENT_ENABLED = 'false'
+process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://127.0.0.1:54321'
+process.env.SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'test-key'
 
 const assert = require('node:assert/strict')
 const { Domain, Action, Decision } = require('../src/detection/types')

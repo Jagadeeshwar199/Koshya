@@ -64,10 +64,18 @@ async function applyAiFallback(ctx, det) {
   const ruleIntent = detectionToIntent(det)
   const { INTENTS } = require('../services/intentService')
   logger.info('AI_FALLBACK', { message: raw, rule_intent: ruleIntent.intent })
+  let conversationState = null
+  let attachLastEntityId = (intent) => intent
+  if (ctx?.userId) {
+    const ecs = require('../services/entityContextService')
+    conversationState = await ecs.getEntityContextForAI(ctx.userId)
+    attachLastEntityId = ecs.attachLastEntityId
+  }
   const ai = await parseWithAI({
     rawMessage: raw,
     normalized: ctx?.normalized || det.message,
-    deterministic: ruleIntent
+    deterministic: ruleIntent,
+    conversationState
   })
   const confPct = ai.success ? Math.round(Number(ai.confidence) * 100) : det.scorePercent
   const baseLearning = {
@@ -100,13 +108,16 @@ async function applyAiFallback(ctx, det) {
       }
     }
   }
-  const intent = {
-    intent: ai.ai_intent,
-    confidence: Number(ai.confidence),
-    rawText: raw,
-    entities: { ...ruleIntent.entities, ...(ai.entities || {}) },
-    source: 'ai'
-  }
+  const intent = attachLastEntityId(
+    {
+      intent: ai.ai_intent,
+      confidence: Number(ai.confidence),
+      rawText: raw,
+      entities: { ...ruleIntent.entities, ...(ai.entities || {}) },
+      source: 'ai'
+    },
+    conversationState
+  )
   return {
     ...det,
     route_source: RouteSource.GEMINI,

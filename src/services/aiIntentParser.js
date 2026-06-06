@@ -5,11 +5,11 @@ const MODEL = 'gemini-2.5-flash'
 const TIMEOUT_MS = Number(process.env.GEMINI_TIMEOUT_MS || 12000)
 const INTENT_SET = new Set(Object.values(INTENTS))
 
-function buildPrompt(rawMessage, normalized, deterministic) {
+function buildPrompt(rawMessage, normalized, deterministic, conversationState) {
   const intents = Object.values(INTENTS).join(', ')
-  return [
+  const lines = [
     'Classify this Koshya WhatsApp message into exactly one intent.',
-    `Allowed intents: ${intents}`,
+    `Allowed intents: ${intents}, UPDATE_REMINDER (same as REMINDER_RESCHEDULE), UPDATE_SUBSCRIPTION (same as SUBSCRIPTION_UPDATE)`,
     'Reply with JSON only, no markdown:',
     '{"intent":"<INTENT>","confidence":0-100,"entities":{},"response":"WhatsApp reply for user","reasoning":"brief"}',
     'confidence is 0-100. response: short confirmation the user should see (use ✓, newlines).',
@@ -18,7 +18,14 @@ function buildPrompt(rawMessage, normalized, deterministic) {
     `deterministic_intent: ${deterministic?.intent || 'none'}`,
     `deterministic_confidence: ${deterministic?.confidence ?? 'none'}`,
     `entities: ${JSON.stringify(deterministic?.entities || {})}`
-  ].join('\n')
+  ]
+  if (conversationState?.last_entity_type) {
+    lines.push(`conversation_state: ${JSON.stringify(conversationState)}`)
+    lines.push(
+      'If conversation_state.last_entity_type is set AND the message starts with sorry, actually, instead, change, move, or make it (case insensitive), treat as UPDATE of that entity — REMINDER_RESCHEDULE for reminder, SUBSCRIPTION_UPDATE for subscription. Target id is conversation_state.last_entity_id. Never CREATE a new row.'
+    )
+  }
+  return lines.join('\n')
 }
 
 function failResult(prompt, reason, extra = {}) {
@@ -77,6 +84,8 @@ function parseJsonText(text) {
 
 function mapIntent(value) {
   const key = String(value || '').trim().toUpperCase()
+  if (key === 'UPDATE_REMINDER') return INTENTS.REMINDER_RESCHEDULE
+  if (key === 'UPDATE_SUBSCRIPTION') return INTENTS.SUBSCRIPTION_UPDATE
   if (INTENT_SET.has(key)) return key
   return INTENTS.UNKNOWN
 }
@@ -122,8 +131,8 @@ async function callGemini(prompt) {
   )
 }
 
-async function parseWithAI({ rawMessage, normalized, deterministic }) {
-  const prompt = buildPrompt(rawMessage, normalized, deterministic)
+async function parseWithAI({ rawMessage, normalized, deterministic, conversationState }) {
+  const prompt = buildPrompt(rawMessage, normalized, deterministic, conversationState)
   const telemetry = { raw_message: rawMessage, normalized_message: normalized }
 
   if (process.env.AI_INTENT_ENABLED !== 'true') {

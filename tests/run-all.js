@@ -14,6 +14,7 @@ const tests = [
   'tests/ai-learning.test.js',
   'tests/koshya-response-layer.test.js',
   'tests/intent-route-source.test.js',
+  'tests/ai-update-detection.test.js',
   'tests/send-reply-once.test.js',
   'test:reminders',
   'test:reminder-title',

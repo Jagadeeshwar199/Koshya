@@ -217,21 +217,32 @@ async function stageAI(ctx, intent, text) {
   }
   try {
     logRouting('AI_FALLBACK', { messageId: ctx.messageId, prior_intent: intent.intent, prior_confidence: ruleConf })
+    let conversationState = null
+    let attachLastEntityId = (i) => i
+    if (ctx.userId) {
+      const ecs = require('./entityContextService')
+      conversationState = await ecs.getEntityContextForAI(ctx.userId)
+      attachLastEntityId = ecs.attachLastEntityId
+    }
     const ai = await parseWithAI({
       rawMessage: ctx.rawMessage,
       normalized: ctx.normalized,
-      deterministic: intent
+      deterministic: intent,
+      conversationState
     })
     const merged =
       ai.success && ai.ai_intent
-        ? {
-            ...intent,
-            intent: ai.ai_intent,
-            confidence: Number(ai.confidence),
-            rawText: intent.rawText || text,
-            entities: { ...intent.entities, ...(ai.entities || {}) },
-            source: 'ai'
-          }
+        ? attachLastEntityId(
+            {
+              ...intent,
+              intent: ai.ai_intent,
+              confidence: Number(ai.confidence),
+              rawText: intent.rawText || text,
+              entities: { ...intent.entities, ...(ai.entities || {}) },
+              source: 'ai'
+            },
+            conversationState
+          )
         : intent
     ctx.geminiResponse = ai.userResponse
     ctx.route_source = ai.success && ai.ai_intent && ai.ai_intent !== 'UNKNOWN' ? RouteSource.GEMINI : RouteSource.UNKNOWN
