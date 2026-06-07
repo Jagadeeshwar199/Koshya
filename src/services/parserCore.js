@@ -510,6 +510,13 @@ function extractServiceName(text) {
 
   const lower = text.toLowerCase().trim()
 
+  if (/^(show|list|delete|remove|cancel|help|hi|hello|start)\b/.test(lower)) {
+    return null
+  }
+  if (/^delete\s+all\b/.test(lower)) {
+    return null
+  }
+
   if (
     /^[a-z0-9+][a-z0-9+\s.-]{0,40}$/i.test(text) &&
     !/^(monthly|yearly|renewal reminder|\d+)$/i.test(lower) &&

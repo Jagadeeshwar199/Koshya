@@ -15,6 +15,21 @@ const { formatSubscriptionAdded } = require('../formatters/subscriptionFormatter
 const { setLastEntity } = require('./entityContextService')
 const logger = require('../../utils/logger')
 
+const { detectIntent, INTENTS } = require('./intentService')
+
+function isBlockedSubscriptionIntent(intent, text = '') {
+  const i = intent?.intent
+  const t = String(text || intent?.rawText || '').trim().toLowerCase()
+  if (/^(show|list)\s+(?:my\s+)?(?:all\s+)?subscriptions?\b/.test(t)) return true
+  if (/^delete\s+all\s+reminders?\b/.test(t)) return true
+  if (/^(hi|hello|start|help)\b/.test(t)) return true
+  if (!i || i === INTENTS.UNKNOWN) return /^(delete|remove|cancel|show|list|help)\b/.test(t)
+  if (i === INTENTS.HELP || i === INTENTS.CANCEL || i === INTENTS.LIST_MORE) return true
+  if (i.endsWith('_QUERY') || i.endsWith('_DELETE') || i === INTENTS.DELETE_ENTITY) return true
+  if (i === INTENTS.REMINDER_CANCEL || i === INTENTS.SUBSCRIPTION_EXPIRY) return true
+  return false
+}
+
 function buildQuestions(missing) {
   const lines = []
 
@@ -36,6 +51,9 @@ function formatSaved(parsed) {
 }
 
 async function saveAndReply(sender, parsed) {
+  if (/^(show|delete|remove|cancel|list|help|all reminders|all subscriptions)/i.test(String(parsed.serviceName || ''))) {
+    return { ok: false, blocked: true }
+  }
   try {
     const subscription = await createSubscriptionRecord({
       userPhone: sender,
@@ -105,6 +123,10 @@ async function askForMissing(sender, draft) {
 }
 
 async function handleSubscriptionMessage(sender, text) {
+  const cmd = detectIntent(text)
+  if (isBlockedSubscriptionIntent(cmd, text)) {
+    return { ok: false, blocked: true }
+  }
   const pending = await getPending(sender)
 
   logger.info('subscription.pending_loaded', {

@@ -50,11 +50,18 @@ async function handleSubscriptionExpiryIntent(sender, intent) {
   return { ok: true, intent: 'SUBSCRIPTION_EXPIRY', subscriptions: [], replySent: reply.success }
 }
 
+function queryServiceFilter(intent) {
+  const name = intent.entities?.serviceName
+  if (!name) return null
+  if (/^(show|list|my|all|tell)$/i.test(String(name).trim())) return null
+  return name
+}
+
 async function handleSubscriptionQueryIntent(sender, intent) {
   const subscriptions = await getUserSubscriptions(sender)
-  const serviceName = intent.entities.serviceName?.toLowerCase()
-  const filtered = serviceName
-    ? matchSubscriptionsByService(subscriptions, intent.entities.serviceName)
+  const filterName = queryServiceFilter(intent)
+  const filtered = filterName
+    ? matchSubscriptionsByService(subscriptions, filterName)
     : subscriptions
 
   if (intent.entities.queryType === 'count') {

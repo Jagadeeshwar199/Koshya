@@ -1,28 +1,19 @@
-const HELP_TEXT = `👋 Koshya tracks subscriptions & reminders.
+const HELP_TEXT = `👋 Hey! I'm Koshya.
 
-Subscriptions:
-Netflix renews on 27th every month - 149
-Show subscriptions
-Delete Netflix
+Just message me naturally:
 
-Reminders:
-Remind me to pay rent tomorrow at 9 PM
-Show reminders
-Delete rent reminder
+📅 Reminders
+"Remind me to pay rent tomorrow at 9 PM"
 
-Reply help anytime.`
+💳 Subscriptions
+"Netflix renews on the 27th every month"
 
-const WELCOME_TEXT = `👋 Hey! I'm Koshya.
+✏️ Updates
+"Sorry, make it 8 PM"
 
-I help you track subscriptions and reminders.
+That's it. No commands to learn.`
 
-Try sending:
-
-Netflix renews on 27th every month - 149
-
-or
-
-Remind me to pay rent tomorrow at 9 PM`
+const WELCOME_TEXT = HELP_TEXT
 
 const SUB_SAVED_NEXT = ''
 const REM_SAVED_NEXT = ''

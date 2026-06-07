@@ -31,6 +31,7 @@ const tests = [
   'test:webhook-auth',
   'tests/security-rollout.test.js',
   'tests/production-bugs.test.js',
+  'tests/production-ux-bugs.test.js',
   'test:ux',
   'test:api'
 ]
