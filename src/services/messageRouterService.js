@@ -19,7 +19,9 @@ const {
   handleSubscriptionUpdateIntent,
   handleHelpIntent,
   handleUnknownIntent,
-  handleClarifyIntent
+  handleClarifyIntent,
+  handleClarifyUpdate,
+  handlePendingConfirmationDecline
 } = require('../controllers/queryController')
 const {
   handleDeleteConfirm,
@@ -36,6 +38,12 @@ const intentPipeline = require('./intentPipelineService')
 const { useLegacyEngine, splitClauses } = require('../detection/detectionEngine')
 const { detectAndPlan } = require('../detection/detectionEngine')
 const { coerceIntentForLastEntity, CLARIFY_UPDATE } = require('./entityUpdateCoercion')
+const {
+  getPendingConfirmation,
+  isConfirmReply,
+  isDeclineReply,
+  buildIntentFromPending
+} = require('./pendingConfirmationService')
 async function resolveIntent(ctx, text) {
   if (useLegacyEngine()) {
     return ctx ? intentPipeline.stageDetect(ctx, text) : detectIntent(text)
@@ -54,8 +62,7 @@ async function routeDetectedIntent(sender, text, intent, options = {}, meta = {}
   intent = await coerceIntentForLastEntity(sender, intent, text)
 
   if (intent.intent === CLARIFY_UPDATE) {
-    const { handleDetectionClarify } = require('../controllers/queryController')
-    return handleDetectionClarify(sender, intent, intent.clarificationText)
+    return handleClarifyUpdate(sender, intent)
   }
 
   if (meta.validationFailed) {
@@ -165,6 +172,25 @@ async function routeWhatsAppMessage(sender, text, options = {}) {
 
 async function routeWhatsAppMessageCore(sender, text, options = {}, ctx = null) {
   const pendingState = await getState(sender)
+
+  const pendingConfirm = await getPendingConfirmation(sender)
+  if (pendingConfirm) {
+    const intent = await resolveIntent(ctx, text)
+    if (isConfirmReply(text) || intent.intent === INTENTS.CONFIRM) {
+      return intentPipeline.stageExecute(ctx, 'update_confirm', async () => {
+        const updateIntent = await buildIntentFromPending(sender)
+        if (!updateIntent) {
+          return handleUnknownIntent(sender, { intent: INTENTS.UNKNOWN, entities: {} }, text)
+        }
+        return handleReminderUpdateIntent(sender, updateIntent)
+      })
+    }
+    if (isDeclineReply(text) || intent.intent === INTENTS.CANCEL) {
+      return intentPipeline.stageExecute(ctx, 'update_decline', () =>
+        handlePendingConfirmationDecline(sender)
+      )
+    }
+  }
 
   if (pendingState?.action === 'confirm_delete') {
     const intent = await resolveIntent(ctx, text)

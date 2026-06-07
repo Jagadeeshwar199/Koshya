@@ -17,6 +17,8 @@ const { matchSubscriptionsByService } = require('../utils/serviceMatcher')
 const { computeNextRenewalDate } = require('../services/reminderService')
 const { sendWhatsAppMessage } = require('../services/whatsappService')
 const { setState } = require('../services/conversationStateService')
+const { setPendingConfirmation, clearPendingConfirmation } = require('../services/pendingConfirmationService')
+const { CLARIFY_UPDATE } = require('../services/entityUpdateCoercion')
 const { getLastEntity, clearDialogueState } = require('../services/entityContextService')
 const {
   formatSubscription,
@@ -320,6 +322,23 @@ async function handleHelpIntent(sender, intent) {
   return { ok: true, intent: intent.intent, replySent: reply.success }
 }
 
+async function handleClarifyUpdate(sender, intent) {
+  const { INTENTS } = require('../services/intentService')
+  await setPendingConfirmation(sender, {
+    pending_intent: intent.pending_intent || intent.execution_intent || INTENTS.REMINDER_RESCHEDULE,
+    target_id: intent.lastEntityId,
+    proposed_changes: intent.entities || {}
+  })
+  const reply = await sendWhatsAppMessage(sender, intent.clarificationText || 'Do you want to update your reminder?')
+  return { ok: true, intent: CLARIFY_UPDATE, replySent: reply.success }
+}
+
+async function handlePendingConfirmationDecline(sender) {
+  await clearPendingConfirmation(sender)
+  const reply = await sendWhatsAppMessage(sender, "Okay, I won't change it.")
+  return { ok: true, intent: 'CANCEL', replySent: reply.success }
+}
+
 async function handleDetectionClarify(sender, intent, clarificationText) {
   const reply = await sendWhatsAppMessage(sender, clarificationText || 'Can you share a bit more detail?')
   return { ok: true, intent: intent?.intent || 'CLARIFY', replySent: reply.success }
@@ -353,5 +372,7 @@ module.exports = {
   handleUnknownIntent,
   handleClarifyIntent,
   handleDetectionClarify,
+  handleClarifyUpdate,
+  handlePendingConfirmationDecline,
   WELCOME_TEXT
 }

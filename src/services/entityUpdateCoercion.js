@@ -72,7 +72,9 @@ async function coerceIntentForLastEntity(sender, intent, text) {
         intent: CLARIFY_UPDATE,
         clarificationText: buildClarifyUpdateText(last),
         entities: scrubCorrectionEntities({ ...det.entities, ...intent.entities, date: dateEntity }),
-        lastEntityId: last.id
+        lastEntityId: last.id,
+        pending_intent: INTENTS.REMINDER_RESCHEDULE,
+        execution_intent: INTENTS.REMINDER_RESCHEDULE
       }
     }
   }

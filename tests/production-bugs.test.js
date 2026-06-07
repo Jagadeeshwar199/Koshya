@@ -11,6 +11,9 @@ require.cache[require.resolve('../src/services/conversationStateService')] = {
     getState: async (phone) => stateByPhone[phone] || null,
     setState: async (phone, patch) => {
       stateByPhone[phone] = { ...(stateByPhone[phone] || {}), ...patch }
+      for (const [k, v] of Object.entries(patch)) {
+        if (v === null || v === undefined) delete stateByPhone[phone][k]
+      }
     },
     clearState: async (phone) => {
       delete stateByPhone[phone]
@@ -26,15 +29,20 @@ require.cache[require.resolve('../src/services/whatsappService')] = {
     clearActiveReplyMessageId: () => {}
   }
 }
+const reminders = []
+let updateCalls = 0
 require.cache[require.resolve('../src/services/reminderService')] = {
   exports: {
     ...require('../src/services/reminderService'),
-    updateReminderFromIntent: async ({ reminderId }) => ({
-      id: reminderId,
-      message: 'Exercise',
-      triggerAt: '2026-06-01T00:30:00.000Z',
-      status: 'pending'
-    }),
+    updateReminderFromIntent: async ({ reminderId, entities }) => {
+      updateCalls++
+      return {
+        id: reminderId,
+        message: 'Exercise',
+        triggerAt: '2026-06-02T00:30:00.000Z',
+        status: 'pending'
+      }
+    },
     updateLatestReminderFromIntent: async () => null
   }
 }
@@ -43,7 +51,9 @@ const { detectIntent, INTENTS } = require('../src/services/intentService')
 const { isCorrectionEntityName } = require('../src/intent/entityExtractor')
 const { coerceIntentForLastEntity, CLARIFY_UPDATE } = require('../src/services/entityUpdateCoercion')
 const { buildKoshyaResponse } = require('../src/services/koshyaResponseLayer')
-const { routeDetectedIntent } = require('../src/services/messageRouterService')
+const { routeDetectedIntent, routeWhatsAppMessage } = require('../src/services/messageRouterService')
+const { handleClarifyUpdate } = require('../src/controllers/queryController')
+const { getPendingConfirmation, PENDING_TTL_MS } = require('../src/services/pendingConfirmationService')
 
 const phone = '919999999999'
 stateByPhone[phone] = {
@@ -102,7 +112,37 @@ stateByPhone[phone] = {
   })
   assert.match(updateReply.text, /Reminder updated/)
 
-  console.log('Production bugfix tests passed: 3')
+  updateCalls = 0
+  stateByPhone[phone] = {
+    last_entity_id: '123',
+    last_entity_type: 'reminder',
+    last_action: 'CREATE',
+    last_entity_title: 'badminton',
+    last_entity_time: 'Tomorrow · 7:00 AM'
+  }
+  const ambiguous = await coerceIntentForLastEntity(phone, detectIntent('actually tomorrow'), 'actually tomorrow')
+  assert.equal(ambiguous.intent, CLARIFY_UPDATE)
+  await handleClarifyUpdate(phone, ambiguous)
+  assert.equal(stateByPhone[phone].pending_confirmation, true)
+  assert.equal(stateByPhone[phone].pending_intent, INTENTS.REMINDER_RESCHEDULE)
+  assert.equal(stateByPhone[phone].target_id, '123')
+  assert.ok(stateByPhone[phone].proposed_changes?.date)
+
+  const yesResult = await routeWhatsAppMessage(phone, 'yes')
+  assert.equal(yesResult.intent, INTENTS.REMINDER_RESCHEDULE)
+  assert.equal(updateCalls, 1)
+  assert.equal(stateByPhone[phone].pending_confirmation, undefined)
+
+  await handleClarifyUpdate(phone, ambiguous)
+  await routeWhatsAppMessage(phone, 'no')
+  assert.equal(updateCalls, 1)
+  assert.equal(stateByPhone[phone].pending_confirmation, undefined)
+
+  await handleClarifyUpdate(phone, ambiguous)
+  stateByPhone[phone].pending_at = new Date(Date.now() - PENDING_TTL_MS - 1000).toISOString()
+  assert.equal(await getPendingConfirmation(phone), null)
+
+  console.log('Production bugfix tests passed: 4')
 })().catch((e) => {
   console.error(e)
   process.exit(1)

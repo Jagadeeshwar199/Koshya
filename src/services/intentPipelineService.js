@@ -307,10 +307,8 @@ async function processClause(ctx, text, executeFn) {
     intent = await coerceIntentForLastEntity(ctx.userId, intent, text)
     if (ctx.lastDetection) ctx.lastDetection.intent = intent
     if (intent.intent === require('./entityUpdateCoercion').CLARIFY_UPDATE) {
-      const { handleDetectionClarify } = require('../controllers/queryController')
-      return stageExecute(ctx, 'CLARIFY_UPDATE', () =>
-        handleDetectionClarify(ctx.userId, intent, intent.clarificationText)
-      )
+      const { handleClarifyUpdate } = require('../controllers/queryController')
+      return stageExecute(ctx, 'CLARIFY_UPDATE', () => handleClarifyUpdate(ctx.userId, intent))
     }
     const det = ctx.lastDetection
     if (
