@@ -55,11 +55,15 @@ const { RouteSource } = require('../src/detection/intentRouting')
   assert.equal(aiCalls, 0)
 
   aiCalls = 0
-  for (const msg of ['Show subscriptions', 'Netflix renews on 27th every month - 149']) {
-    const d = await detectAndPlan(msg)
-    assert.equal(d.route_source, RouteSource.RULE, msg)
-  }
+  const show = await detectAndPlan('Show subscriptions')
+  assert.equal(show.route_source, RouteSource.RULE)
   assert.equal(aiCalls, 0)
+
+  aiCalls = 0
+  const netflix = await detectAndPlan('Netflix renews on 27th every month - 149')
+  assert.equal(netflix.route_source, RouteSource.RULE)
+  assert.equal(netflix.intent.intent, 'SUBSCRIPTION_CREATE')
+  assert.equal(aiCalls, 1)
   console.log('Intent route source tests passed: 5')
 })().catch((e) => {
   console.error(e)

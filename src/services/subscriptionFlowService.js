@@ -50,18 +50,21 @@ function formatSaved(parsed) {
   return formatSubscriptionAdded(parsed)
 }
 
-async function saveAndReply(sender, parsed) {
+async function saveAndReply(sender, parsed, text = '') {
   if (/^(show|delete|remove|cancel|list|help|all reminders|all subscriptions)/i.test(String(parsed.serviceName || ''))) {
     return { ok: false, blocked: true }
   }
   try {
+    const { parseFirst } = require('./parseFirstService')
+    const pf = parseFirst(text || parsed.serviceName)
     const subscription = await createSubscriptionRecord({
       userPhone: sender,
       serviceName: parsed.serviceName,
       amount: parsed.amount,
       renewalDay: parsed.renewalDay,
       renewalMonth: parsed.renewalMonth,
-      recurrence: parsed.recurrence
+      recurrence: parsed.recurrence,
+      parseMeta: pf
     })
 
     await clearPending(sender)
@@ -70,7 +73,14 @@ async function saveAndReply(sender, parsed) {
       title: parsed.serviceName,
       time: parsed.renewalDay ? `${parsed.renewalDay}th` : null
     })
-    const reply = await sendWhatsAppMessage(sender, formatSaved(parsed))
+    const reply = await sendWhatsAppMessage(
+      sender,
+      formatSubscriptionAdded({
+        ...parsed,
+        taskText: subscription.taskText || pf.taskText,
+        scheduleText: subscription.scheduleText || pf.scheduleText
+      })
+    )
 
     if (!reply.success) {
       logger.warn('subscription.confirmation_failed', {
@@ -144,7 +154,7 @@ async function handleSubscriptionMessage(sender, text) {
   })
 
   if (parsed.type === 'subscription' && parsed.success) {
-    return saveAndReply(sender, parsed)
+    return saveAndReply(sender, parsed, text)
   }
 
   if (parsed.type === 'incomplete') {
@@ -152,7 +162,7 @@ async function handleSubscriptionMessage(sender, text) {
     const completed = finalizeDraft(merged)
 
     if (completed.type === 'subscription' && completed.success) {
-      return saveAndReply(sender, completed)
+      return saveAndReply(sender, completed, text)
     }
 
     return askForMissing(sender, merged)
@@ -167,7 +177,7 @@ async function handleSubscriptionMessage(sender, text) {
     const completed = finalizeDraft(merged)
 
     if (completed.type === 'subscription' && completed.success) {
-      return saveAndReply(sender, completed)
+      return saveAndReply(sender, completed, text)
     }
 
     return askForMissing(sender, merged)

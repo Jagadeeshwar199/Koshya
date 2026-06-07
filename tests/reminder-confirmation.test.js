@@ -21,7 +21,7 @@ assert.deepEqual(formatReminderTime(reminder.triggerAt, now), {
 
 assert.equal(
   formatReminderConfirmation(reminder, now),
-`✅ Reminder set
+`✅ Got it
 
 Exercise
 Tomorrow · 10:00 AM`

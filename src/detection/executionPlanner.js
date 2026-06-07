@@ -39,6 +39,9 @@ function planExecution(domain, action, entities, lower, scores) {
   if (isHelpIntentMessage(lower)) {
     return { decision: Decision.EXECUTE, reasons: [...reasons, 'help_intent'], winner: 'GENERAL:HELP', score: 95, ...base }
   }
+  if ((action === Action.CREATE || action === Action.UPDATE) && scorePct < 90) {
+    return { decision: Decision.AI_FALLBACK, reasons: [...reasons, 'score_below_90'], ...base }
+  }
   if (domain === Domain.UNKNOWN || action === Action.UNKNOWN) {
     return { decision: Decision.AI_FALLBACK, reasons: [...reasons, 'unknown_domain_or_action'], ...base }
   }

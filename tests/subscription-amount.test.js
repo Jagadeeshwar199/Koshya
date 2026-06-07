@@ -20,10 +20,11 @@ const withAmount = parseMessage('Netflix renews on 27th every month for ₹649')
 assert.equal(withAmount.success, true)
 assert.equal(withAmount.amount, 649)
 
-assert.match(formatSubscriptionAdded(noAmount), /✅ Subscription set/)
+assert.match(formatSubscriptionAdded(noAmount), /✅ Got it/)
 assert.match(formatSubscriptionAdded(noAmount), /Every month · 27th/)
 assert.doesNotMatch(formatSubscriptionAdded(noAmount), /₹/)
 
-assert.match(formatSubscriptionAdded(withAmount), /₹649/)
+assert.match(formatSubscriptionAdded(withAmount), /Every month · 27th/)
+assert.doesNotMatch(formatSubscriptionAdded(withAmount), /₹649/)
 
 console.log('subscription-amount tests passed')

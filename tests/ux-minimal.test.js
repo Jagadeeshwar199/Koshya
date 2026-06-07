@@ -35,7 +35,7 @@ const confirm = formatReminderConfirmation(
   },
   now
 )
-assert.match(confirm, /^✅ Reminder set\n\nDrink water\nIn 8 minutes$/)
+assert.match(confirm, /^✅ Got it\n\nDrink water\nIn 8 minutes$/)
 assert.doesNotMatch(confirm, /show reminders/)
 
 assert.match(
@@ -53,7 +53,7 @@ assert.match(
     recurrence: 'monthly',
     renewalDay: 27
   }),
-  /₹149/
+  /Every month · 27th/
 )
 assert.match(
   formatSubscriptionAdded({

@@ -62,7 +62,7 @@ assert.equal(
     },
     new Date('2026-05-31T18:25:00.000Z')
   ),
-`✅ Reminder updated
+`✅ Got it
 
 Exercise
 Tomorrow · 9:00 AM`

@@ -112,6 +112,7 @@ function validateRecurrence(recurrence) {
 }
 
 function subscriptionToRow(subscription) {
+  const { parseMetaRow } = require('./parseFirstService')
   return {
     user_phone: normalizePhone(subscription.userPhone),
     service_name: validateServiceName(subscription.serviceName),
@@ -124,7 +125,8 @@ function subscriptionToRow(subscription) {
         ? null
         : validateRenewalDay(subscription.renewalDay),
     renewal_month: validateRenewalMonth(subscription.renewalMonth),
-    recurrence: validateRecurrence(subscription.recurrence)
+    recurrence: validateRecurrence(subscription.recurrence),
+    ...parseMetaRow(subscription.parseMeta)
   }
 }
 
@@ -179,6 +181,9 @@ function mapSubscriptionRow(row) {
     active: row.active,
     reminderDaysBefore: row.reminder_days_before,
     lastRemindedAt: row.last_reminded_at,
+    taskText: row.task_text,
+    scheduleText: row.schedule_text,
+    itemType: row.item_type,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   }

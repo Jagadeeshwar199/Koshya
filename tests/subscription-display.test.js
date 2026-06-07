@@ -20,8 +20,8 @@ assert.equal(prime.renewalMonth, null)
 const netflix = parseMessage('Netflix renewls on 27th every month - 149')
 assert.equal(netflix.serviceName, 'Netflix')
 
-assert.match(formatSubscriptionAdded(prime), /✅ Subscription set/)
-assert.match(formatSubscriptionAdded(prime), /₹149/)
+assert.match(formatSubscriptionAdded(prime), /Every month · 23rd/)
+assert.doesNotMatch(formatSubscriptionAdded(prime), /₹149/)
 assert.doesNotMatch(formatSubscriptionAdded(prime), /show subscriptions/)
 
 const spotify = {

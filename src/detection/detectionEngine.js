@@ -127,6 +127,28 @@ async function applyAiFallback(ctx, det) {
   })
 
   if (!ai.success || !ai.ai_intent || ai.ai_intent === INTENTS.UNKNOWN) {
+    const keepRule =
+      ruleIntent?.intent &&
+      ruleIntent.intent !== INTENTS.UNKNOWN &&
+      !det.missingFields?.length &&
+      (det.scorePercent >= 90 || !ai.success || ai.ai_intent === INTENTS.UNKNOWN)
+    if (keepRule) {
+      return {
+        ...det,
+        route_source: RouteSource.RULE,
+        intent: ruleIntent,
+        usedAI: Boolean(ai.success),
+        aiMeta: ai,
+        decision: Decision.EXECUTE,
+        canExecute: true,
+        parseFirst: require('../services/parseFirstService').parseFirst(raw, ai),
+        pendingLearning: trace(ruleIntent, {
+          used_ai: Boolean(ai.success),
+          confidence: det.scorePercent,
+          failure_reason: ai.failure_reason || 'ai_unknown_kept_rule'
+        })
+      }
+    }
     if (ctx?.userId) {
       const coerced = await coerceIntentForLastEntity(
         ctx.userId,
@@ -200,6 +222,18 @@ async function applyAiFallback(ctx, det) {
     },
     conversationState
   )
+  const pf = require('../services/parseFirstService').parseFirst(raw, ai)
+  const createIntents = new Set([INTENTS.SUBSCRIPTION_CREATE, INTENTS.REMINDER_CREATE])
+  const ruleWins =
+    ruleIntent.intent !== INTENTS.UNKNOWN &&
+    !det.missingFields?.length &&
+    (ai.ai_intent === INTENTS.UNKNOWN ||
+      (createIntents.has(ruleIntent.intent) && ai.ai_intent !== ruleIntent.intent))
+  if (ruleWins) {
+    intent.intent = ruleIntent.intent
+    intent.execution_intent = ruleIntent.intent
+    intent.confidence = Math.max(Number(intent.confidence) || 0, det.scorePercent / 100)
+  }
   if (ctx?.userId) {
     intent = await coerceIntentForLastEntity(ctx.userId, intent, raw)
   }
@@ -226,7 +260,7 @@ async function applyAiFallback(ctx, det) {
   })
   return {
     ...det,
-    route_source: RouteSource.GEMINI,
+    route_source: ruleWins ? RouteSource.RULE : RouteSource.GEMINI,
     intent,
     usedAI: true,
     aiMeta: ai,
@@ -234,7 +268,14 @@ async function applyAiFallback(ctx, det) {
     scorePercent: confPct,
     decision: Decision.EXECUTE,
     canExecute: true,
-    pendingLearning: trace(intent, { used_ai: true })
+    parseFirst: pf,
+    pendingLearning: {
+      ...trace(intent, { used_ai: true }),
+      task_text: pf.taskText,
+      schedule_text: pf.scheduleText,
+      item_type: pf.itemType,
+      escalated_to_ai: pf.escalatedToAi
+    }
   }
 }
 

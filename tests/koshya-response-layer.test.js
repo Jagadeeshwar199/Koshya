@@ -48,7 +48,7 @@ const createViaExec = buildKoshyaResponse({
   },
   validationOk: true
 })
-assert.match(createViaExec.text, /Reminder set/)
+assert.match(createViaExec.text, /Got it/)
 
 const updateViaExec = buildKoshyaResponse({
   intent: INTENTS.REMINDER_CREATE,
@@ -61,6 +61,6 @@ const updateViaExec = buildKoshyaResponse({
   },
   validationOk: true
 })
-assert.match(updateViaExec.text, /Reminder updated/)
+assert.match(updateViaExec.text, /Got it/)
 
 console.log('Koshya response layer tests passed: 6')

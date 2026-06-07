@@ -438,7 +438,7 @@ const BLOCKED_SERVICE_NAMES = new Set([
 function extractActionText(text) {
   const patterns = [
     /\b(?:need to|must|should|have to)\s+(.+?)(?:\s+(?:tomorrow|today|tonight|on|at|in|after|next|friday|monday|tuesday|wednesday|thursday|saturday|sunday)\b|$)/i,
-    /\b(?:remind\s+me\s+(?:to|about))\s+(.+?)(?:\s+(?:tomorrow|today|at|on|in|after)\b|$)/i,
+    /\b(?:remind\s+me\s+(?:to|about))\s+(.+?)(?:\s+(?:tomorrow|today|at|on|in|after|every)\b|$)/i,
     /\b([a-z].+?)\s+(?:tomorrow|today|tonight)\b/i,
     /^(?:mom|milk|doctor|gym|emi|rent)\s+(?:tomorrow|today|tonight|friday|monday|tuesday|wednesday|thursday|saturday|sunday|\d{1,2}(?:st|nd|rd|th)?)\b/i,
     /\b((?:doctor|dentist)\s+)?appointment\s+([a-z]+day)\b/i,

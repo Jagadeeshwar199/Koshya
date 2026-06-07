@@ -9,11 +9,11 @@ function buildPrompt(rawMessage, normalized, deterministic, conversationState) {
   const intents = Object.values(INTENTS).join(', ')
   const cs = conversationState || {}
   const lines = [
-    'Classify this Koshya WhatsApp message into exactly one intent.',
+    'Extract task and schedule from this Koshya WhatsApp message. Classify internally only.',
     `Allowed intents: ${intents}, UPDATE_REMINDER, UPDATE_SUBSCRIPTION`,
     'Reply with JSON only, no markdown:',
-    '{"intent":"<INTENT>","confidence":0-100,"entities":{},"response":"WhatsApp reply for user","reasoning":"brief"}',
-    'confidence is 0-100. response: short confirmation the user should see (use ✓, newlines).',
+    '{"intent":"<INTENT>","confidence":0-100,"entities":{"actionText":"","serviceName":"","date":{},"recurrence":""},"task":"","schedule":"","item_type":"REMINDER|SUBSCRIPTION|EVENT|BILL"}',
+    'confidence is 0-100. Do NOT use reminder/subscription labels in task or schedule.',
     '',
     `message: ${normalized || rawMessage}`
   ]
@@ -188,6 +188,9 @@ async function parseWithAI({ rawMessage, normalized, deterministic, conversation
       }
     }
     const userResponse = String(parsed.response || '').trim() || null
+    const task = String(parsed.task || parsed.entities?.actionText || '').trim() || null
+    const schedule = String(parsed.schedule || '').trim() || null
+    const item_type = String(parsed.item_type || '').trim().toUpperCase() || null
 
     logger.info('ai_intent.classified', {
       ai_intent: aiIntent,
@@ -199,7 +202,10 @@ async function parseWithAI({ rawMessage, normalized, deterministic, conversation
     const entities = normalizeEntities(parsed.entities)
     return {
       ...telemetry,
-      ...okResult(prompt, text, aiIntent, confidence, extractUsage(response), entities, userResponse, rawAiIntent)
+      ...okResult(prompt, text, aiIntent, confidence, extractUsage(response), entities, userResponse, rawAiIntent),
+      task,
+      schedule,
+      item_type
     }
   } catch (err) {
     const reason = err.message === 'gemini_timeout' ? 'gemini_timeout' : 'gemini_request_failed'

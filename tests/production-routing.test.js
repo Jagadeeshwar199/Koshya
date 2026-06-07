@@ -86,20 +86,20 @@ const { detectIntent, detectClauseIntents } = require('../src/services/intentSer
 const { extractReminderTitle } = require('../src/services/reminderService')
 
 const cases = [
-  { id: 1, msg: 'Remaind me to go to the toilet at 1 AM', intent: 'REMINDER_CREATE', route: /Reminder set/i, noRoute: /Show reminders/i, title: 'go to the toilet', entity: (e) => e.date?.time?.hour === 1 },
+  { id: 1, msg: 'Remaind me to go to the toilet at 1 AM', intent: 'REMINDER_CREATE', route: /Got it/i, noRoute: /Show reminders/i, title: 'go to the toilet', entity: (e) => e.date?.time?.hour === 1 },
   { id: 2, msg: 'change my toilet reminder to 2 AM', intent: 'REMINDER_RESCHEDULE', route: /updated|2 AM|toilet/i, entity: (e) => e.date?.time?.hour === 2, setup: () => {} },
   { id: 3, msg: 'delete my toilet reminder', intent: 'REMINDER_CANCEL', route: /deleted|cancelled|toilet/i, entity: (e) => /toilet/i.test(e.serviceName || '') },
-  { id: 4, msg: 'show my reminders', intent: 'REMINDER_QUERY', route: /reminder/i, noRoute: /Reminder set|When should I/ },
-  { id: 5, msg: 'remind me in 5 mins', intent: 'REMINDER_CREATE', route: /Reminder set/i, title: 'Reminder', entity: (e) => e.date?.kind === 'offset' },
+  { id: 4, msg: 'show my reminders', intent: 'REMINDER_QUERY', route: /reminder/i, noRoute: /Got it|When should I/ },
+  { id: 5, msg: 'remind me in 5 mins', intent: 'REMINDER_CREATE', route: /Got it/i, title: 'Reminder', entity: (e) => e.date?.kind === 'offset' },
   { id: 6, msg: 'Netflix ends at 7 PM tomorrow', intent: 'SUBSCRIPTION_EXPIRY', route: /Expiry|isn't tracked/i, noRoute: /Expiring soon/i, entity: (e) => e.serviceName === 'Netflix' },
   { id: 7, msg: 'Netflix every month on 27th', intent: 'SUBSCRIPTION_CREATE', route: /Netflix|amount|month|27|Got Netflix|need/i, entity: (e) => /^Netflix$/i.test(e.serviceName || '') && e.recurrence === 'monthly' },
   { id: 8, msg: 'change Netflix expiry to tomorrow 9 PM', intent: 'SUBSCRIPTION_UPDATE', route: /Updated Netflix expiry|Netflix/i, noRoute: /Expiring soon/i },
   { id: 9, msg: 'delete Netflix subscription', intent: 'SUBSCRIPTION_DELETE', route: /delete|confirm|Netflix/i, noRoute: /Expiring soon/i },
   { id: 10, msg: 'show my subscriptions', intent: 'SUBSCRIPTION_QUERY', route: /Subscriptions/i, noRoute: /isn't tracked yet/i },
   { id: 11, msg: 'SuperStream expires tomorrow', intent: 'SUBSCRIPTION_EXPIRY', route: /isn't tracked yet/i, noRoute: /No matching/i },
-  { id: 12, msg: 'Netflix expires tomorrow and remind me today at 8 PM', intents: ['SUBSCRIPTION_EXPIRY', 'REMINDER_CREATE'], route: /Expiry|Reminder set|isn't tracked/i },
+  { id: 12, msg: 'Netflix expires tomorrow and remind me today at 8 PM', intents: ['SUBSCRIPTION_EXPIRY', 'REMINDER_CREATE'], route: /Expiry|Got it|isn't tracked/i },
   { id: 13, msg: 'netflix tmrw', intent: 'UNKNOWN', route: /What should I do with/i, noRoute: /Expiring soon|Subscriptions\n\nNetflix/i },
-  { id: 14, msg: 'what is expiring soon', intent: 'SUBSCRIPTION_QUERY', route: /Expiring soon/i, noRoute: /Reminder set/i, entity: (e) => e.queryType === 'expiry' }
+  { id: 14, msg: 'what is expiring soon', intent: 'SUBSCRIPTION_QUERY', route: /Expiring soon/i, noRoute: /Got it/i, entity: (e) => e.queryType === 'expiry' }
 ]
 
 async function runCase(c) {

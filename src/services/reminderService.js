@@ -293,6 +293,9 @@ function mapReminderRow(row) {
     triggerAt: row.trigger_at,
     sentAt: row.sent_at,
     retryCount: row.retry_count,
+    taskText: row.task_text,
+    scheduleText: row.schedule_text,
+    itemType: row.item_type,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   }
@@ -534,15 +537,16 @@ function normalizeReminderMessage(message) {
     .replace(/[^a-z0-9]/g, '')
 }
 
-async function createReminderFromIntent({ userPhone, message, entities = {} }) {
+async function createReminderFromIntent({ userPhone, message, entities = {}, parseMeta = {} }) {
   if (!userPhone) {
     throw new ApiError(400, 'userPhone is required')
   }
 
-  const subject = extractReminderTitle(message, entities.serviceName)
+  const subject = parseMeta.taskText || extractReminderTitle(message, entities.serviceName)
   const daily = /\b(?:daily|every\s+day)\b/i.test(message)
   const packedMessage = packReminderMessage(subject, { daily })
   const triggerAt = resolveTriggerAt(entities.date)
+  const { parseMetaRow } = require('./parseFirstService')
 
   logger.info('reminder.schedule', {
     userPhone,
@@ -558,7 +562,8 @@ async function createReminderFromIntent({ userPhone, message, entities = {} }) {
       message: packedMessage,
       status: 'pending',
       trigger_at: triggerAt.toISOString(),
-      retry_count: 0
+      retry_count: 0,
+      ...parseMetaRow(parseMeta)
     })
     .select('*')
     .maybeSingle()

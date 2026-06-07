@@ -1,5 +1,5 @@
-const { computeNextRenewalDate, resolveTriggerAt } = require('../services/reminderService')
-const { unpackReminderMessage, normalizeReminderTitle } = require('../services/reminderService')
+const { formatGotIt } = require('./unifiedUxFormatter')
+const { computeNextRenewalDate, unpackReminderMessage, normalizeReminderTitle } = require('../services/reminderService')
 
 function getIstParts(date) {
   const formatter = new Intl.DateTimeFormat('en-IN', {
@@ -91,17 +91,15 @@ function formatReminderListTime(triggerAt, now = new Date()) {
 }
 
 function formatReminderConfirmation(reminder, now = new Date()) {
-  return `✅ Reminder set
-
-${displayReminderTitle(reminder.message)}
-${formatReminderScheduleLine(reminder, now)}`
+  const task = reminder.taskText || displayReminderTitle(reminder.message)
+  const schedule = reminder.scheduleText || formatReminderScheduleLine(reminder, now)
+  return formatGotIt(task, schedule)
 }
 
 function formatReminderUpdateConfirmation(reminder, now = new Date()) {
-  return `✅ Reminder updated
-
-${displayReminderTitle(reminder.message)}
-${formatReminderScheduleLine(reminder, now)}`
+  const task = reminder.taskText || displayReminderTitle(reminder.message)
+  const schedule = reminder.scheduleText || formatReminderScheduleLine(reminder, now)
+  return formatGotIt(task, schedule)
 }
 
 function formatReminderCancelConfirmation(reminder) {

@@ -33,6 +33,7 @@ function applyTypoFixes(text) {
     .replace(/\bremnder\b/gi, 'remind')
     .replace(/\bremaind\b/gi, 'remind')
     .replace(/\bremindar\b/gi, 'remind')
+    .replace(/\bremind\s+be\b/gi, 'remind me')
 }
 
 function normalizeText(text) {

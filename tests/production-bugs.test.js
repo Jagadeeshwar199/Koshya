@@ -98,7 +98,7 @@ stateByPhone[phone] = {
     },
     validationOk: true
   })
-  assert.match(createReply.text, /Reminder set/)
+  assert.match(createReply.text, /Got it/)
 
   const updateReply = buildKoshyaResponse({
     intent: INTENTS.REMINDER_CREATE,
@@ -111,7 +111,7 @@ stateByPhone[phone] = {
     },
     validationOk: true
   })
-  assert.match(updateReply.text, /Reminder updated/)
+  assert.match(updateReply.text, /Got it/)
 
   updateCalls = 0
   stateByPhone[phone] = {

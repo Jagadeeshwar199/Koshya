@@ -1,4 +1,5 @@
 const { computeNextRenewalDate } = require('../services/reminderService')
+const { formatGotIt } = require('./unifiedUxFormatter')
 
 function cycleLabel(recurrence) {
   if (recurrence === 'monthly') {
@@ -80,19 +81,15 @@ function formatSubscription(subscription) {
 }
 
 function formatSubscriptionAdded(parsed) {
-  const lines = ['✅ Subscription set', '', parsed.serviceName]
-  const schedule = formatScheduleShort(parsed)
-  if (schedule) lines.push(schedule)
-  if (parsed.amount != null) lines.push(`₹${parsed.amount}`)
-  return lines.join('\n')
+  const task = parsed.taskText || parsed.serviceName
+  const schedule = parsed.scheduleText || formatScheduleShort(parsed)
+  return formatGotIt(task, schedule)
 }
 
 function formatSubscriptionUpdated(subscription) {
-  const lines = ['✅ Subscription updated', '', subscription.serviceName]
-  const schedule = formatScheduleShort(subscription)
-  if (schedule) lines.push(schedule)
-  if (subscription.amount != null) lines.push(`₹${subscription.amount}`)
-  return lines.join('\n')
+  const task = subscription.taskText || subscription.serviceName
+  const schedule = subscription.scheduleText || formatScheduleShort(subscription)
+  return formatGotIt(task, schedule)
 }
 
 function formatSubscriptionRemoved(subscription) {

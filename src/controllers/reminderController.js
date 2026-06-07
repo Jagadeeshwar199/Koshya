@@ -94,10 +94,13 @@ async function handleReminderCreateIntent(sender, text, intent) {
     }
   }
 
+  const { parseFirst } = require('../services/parseFirstService')
+  const pf = parseFirst(text)
   const reminder = await createReminderFromIntent({
     userPhone: sender,
     message: text,
-    entities: intent.entities
+    entities: intent.entities,
+    parseMeta: pf
   })
   const { title } = unpackReminderMessage(reminder.message)
   const { dateLabel, timeLabel } = formatReminderTime(reminder.triggerAt)

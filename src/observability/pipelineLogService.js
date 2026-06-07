@@ -77,7 +77,11 @@ async function logAI(messageId, payload) {
     error_message: payload.error_message ?? payload.failure_reason ?? null,
     failure_reason: payload.failure_reason || null,
     gemini_response: payload.gemini_response ?? null,
-    response_sent: payload.response_sent ?? null
+    response_sent: payload.response_sent ?? null,
+    task_text: payload.task_text ?? null,
+    schedule_text: payload.schedule_text ?? null,
+    item_type: payload.item_type ?? null,
+    escalated_to_ai: payload.escalated_to_ai === true
   })
 }
 
