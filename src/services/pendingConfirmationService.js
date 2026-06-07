@@ -1,7 +1,27 @@
 const { getState, setState } = require('./conversationStateService')
 const { isExecutablePendingOverrideIntent } = require('../intent/executableIntents')
+const { INTENTS } = require('./intentService')
 
 const PENDING_TTL_MS = 10 * 60 * 1000
+
+function isGreetingMessage(text) {
+  return /^(hi|hello|hey|start)$/i.test(String(text || '').trim())
+}
+
+function shouldApplyPendingConfirmation(intent, text) {
+  const t = String(text || '').trim()
+  if (isGreetingMessage(t) || intent?.intent === INTENTS.HELP) return false
+  if (intent?.intent === INTENTS.CONFIRM) return true
+  if (/^(yes|y|ok|okay|confirm)$/i.test(t)) return true
+  if (
+    intent?.entities?.date &&
+    intent.intent !== INTENTS.REMINDER_CREATE &&
+    intent.intent !== INTENTS.SUBSCRIPTION_CREATE
+  ) {
+    return true
+  }
+  return false
+}
 
 async function setPendingConfirmation(userPhone, { pending_intent, target_id, proposed_changes }) {
   const s = (await getState(userPhone)) || {}
@@ -67,6 +87,8 @@ async function resolvePendingAction(userPhone, detectedIntent = {}) {
 module.exports = {
   PENDING_TTL_MS,
   isExecutablePendingOverrideIntent,
+  isGreetingMessage,
+  shouldApplyPendingConfirmation,
   setPendingConfirmation,
   getPendingConfirmation,
   clearPendingConfirmation,

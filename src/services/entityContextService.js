@@ -8,7 +8,8 @@ async function getLastEntity(userPhone) {
   return {
     id: s.last_entity_id,
     type: s.last_entity_type,
-    title: s.last_entity_title || null
+    title: s.last_entity_title || null,
+    time: s.last_entity_time || null
   }
 }
 

@@ -106,8 +106,8 @@ async function handleReminderCreateIntent(sender, text, intent) {
   const { dateLabel, timeLabel } = formatReminderTime(reminder.triggerAt)
   await setLastEntity(sender, 'reminder', reminder.id, {
     action: 'CREATE',
-    title,
-    time: timeLabel ? `${dateLabel} · ${timeLabel}` : dateLabel
+    title: pf.taskText || title,
+    time: pf.scheduleText || (timeLabel ? `${dateLabel} · ${timeLabel}` : dateLabel)
   })
 
   const reply = await sendWhatsAppMessage(
@@ -168,6 +168,8 @@ async function handleReminderUpdateIntent(sender, intent) {
   }
 
   await clearDialogueState(sender)
+  const { clearPendingConfirmation } = require('../services/pendingConfirmationService')
+  await clearPendingConfirmation(sender)
   const reply = await sendWhatsAppMessage(
     sender,
     formatReminderUpdateConfirmation(reminder)
@@ -194,6 +196,8 @@ async function handleReminderTimeFollowUp(sender, dateEntity) {
   }
 
   await clearDialogueState(sender)
+  const { clearPendingConfirmation } = require('../services/pendingConfirmationService')
+  await clearPendingConfirmation(sender)
   const reply = await sendWhatsAppMessage(
     sender,
     formatReminderUpdateConfirmation(reminder)

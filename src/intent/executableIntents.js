@@ -32,11 +32,7 @@ function isExecutablePendingOverrideIntent(intent) {
 }
 
 function isCoercePassthroughIntent(intent, text = '') {
-  if (!intent?.intent || !COERCE_PASSTHROUGH_INTENTS.has(intent.intent)) return false
-  if (intent.intent === INTENTS.REMINDER_CREATE && !/\bremind\s+me\b/i.test(String(text || ''))) {
-    return false
-  }
-  return true
+  return Boolean(intent?.intent && COERCE_PASSTHROUGH_INTENTS.has(intent.intent))
 }
 
 module.exports = {

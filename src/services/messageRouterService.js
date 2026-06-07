@@ -53,7 +53,9 @@ const {
   getPendingConfirmation,
   clearPendingConfirmation,
   isExecutablePendingOverrideIntent,
-  resolvePendingAction
+  resolvePendingAction,
+  isGreetingMessage,
+  shouldApplyPendingConfirmation
 } = require('./pendingConfirmationService')
 const {
   tryStartDeleteFlow,
@@ -225,13 +227,31 @@ async function routeWhatsAppMessageCore(sender, text, options = {}, ctx = null) 
         handlePendingConfirmationDecline(sender)
       )
     }
-    return intentPipeline.stageExecute(ctx, 'update_confirm', async () => {
-      const updateIntent = await resolvePendingAction(sender, intent)
-      if (!updateIntent) {
-        return handleUnknownIntent(sender, { intent: INTENTS.UNKNOWN, entities: {} }, text)
+    if (isGreetingMessage(text) || intent.intent === INTENTS.HELP) {
+      await clearPendingConfirmation(sender)
+      if (ctx) {
+        return intentPipeline.processClause(ctx, text, (_detected, meta) =>
+          routeDetectedIntent(sender, text, intent, options, meta)
+        )
       }
-      return handleReminderUpdateIntent(sender, updateIntent)
-    })
+      return routeDetectedIntent(sender, text, intent, options)
+    }
+    if (shouldApplyPendingConfirmation(intent, text)) {
+      return intentPipeline.stageExecute(ctx, 'update_confirm', async () => {
+        const updateIntent = await resolvePendingAction(sender, intent)
+        if (!updateIntent) {
+          return handleUnknownIntent(sender, { intent: INTENTS.UNKNOWN, entities: {} }, text)
+        }
+        return handleReminderUpdateIntent(sender, updateIntent)
+      })
+    }
+    await clearPendingConfirmation(sender)
+    if (ctx) {
+      return intentPipeline.processClause(ctx, text, (_detected, meta) =>
+        routeDetectedIntent(sender, text, intent, options, meta)
+      )
+    }
+    return routeDetectedIntent(sender, text, intent, options)
   }
 
   if (pendingState?.action === 'pending_delete') {
