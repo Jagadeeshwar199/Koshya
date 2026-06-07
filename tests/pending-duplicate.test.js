@@ -119,7 +119,15 @@ function setLastFw() {
   assert.equal(updateCalls, 0)
   assert.equal(createCalls, beforeNew + 1)
 
-  console.log('Pending duplicate tests passed: 5')
+  setLastFw()
+  await handleClarifyUpdate(phone, dupCoerced)
+  updateCalls = 0
+  await routeWhatsAppMessage(phone, 'yes')
+  assert.equal(stateByPhone[phone].pending_action, undefined)
+  assert.equal(updateCalls, 1)
+  assert.equal(createCalls, beforeNew + 1)
+
+  console.log('Pending duplicate tests passed: 6')
 })().catch((e) => {
   console.error(e)
   process.exit(1)

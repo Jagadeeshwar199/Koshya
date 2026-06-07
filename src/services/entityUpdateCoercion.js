@@ -53,8 +53,9 @@ function looksLikeNewReminderCreate(text, parseResult) {
   return true
 }
 function buildClarifyUpdateText(last) {
-  const title = last?.title || 'your'
-  return `Do you want to update your ${title} reminder?`
+  const title = last?.title || 'Task'
+  const schedule = last?.time || ''
+  return `I already have:\n\n${title}\n${schedule}\n\nUpdate it?\n(yes/no)`
 }
 
 function isAmbiguousUpdateCandidate(text, intent, dateEntity) {

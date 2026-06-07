@@ -82,7 +82,8 @@ stateByPhone[phone] = {
     const rule = detectIntent(msg)
     const coerced = await coerceIntentForLastEntity(phone, rule, msg)
     assert.equal(coerced.intent, CLARIFY_UPDATE, msg)
-    assert.match(coerced.clarificationText, /Do you want to update your badminton reminder\?/i, msg)
+    assert.match(coerced.clarificationText, /I already have:/i, msg)
+    assert.match(coerced.clarificationText, /Update it\?/i, msg)
   }
 
   assert.equal(detectIntent('Actually tomorrow').entities.serviceName, undefined)

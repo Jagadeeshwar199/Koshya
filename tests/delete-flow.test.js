@@ -93,15 +93,24 @@ async function run() {
   await tryStartDeleteFlow('919999999999', 'Delete all reminders')
   assert.equal(state.action, 'pending_delete')
   assert.equal(state.delete_scope, 'all_reminders')
-  assert.match(sent.at(-1), /DELETE ALL/)
+  assert.match(sent.at(-1), /Are you sure\?/)
+  assert.match(sent.at(-1), /\(yes\/no\)/)
 
   sent.length = 0
+  cancelled.length = 0
   await handlePendingDeleteReply('919999999999', 'yes', state)
-  assert.match(sent.at(-1), /DELETE ALL/)
+  assert.deepEqual(cancelled, ['r1', 'r2'])
+  assert.match(sent.at(-1), /All reminders removed/)
+  assert.equal(state, null)
 
+  state = null
   sent.length = 0
-  await handlePendingDeleteReply('919999999999', 'DELETE ALL', state)
-  assert.match(sent.at(-1), /Nothing deleted yet/)
+  cancelled.length = 0
+  await tryStartDeleteFlow('919999999999', 'Delete all reminders')
+  sent.length = 0
+  await handlePendingDeleteReply('919999999999', 'no', state)
+  assert.deepEqual(cancelled, [])
+  assert.match(sent.at(-1), /Cancelled/)
   assert.equal(state, null)
 
   state = null
@@ -120,7 +129,7 @@ async function run() {
   assert.equal(state.action, 'pending_delete')
   assert.equal(state.delete_scope, 'all_reminders')
 
-  console.log('Delete flow tests passed: 8')
+  console.log('Delete flow tests passed: 9')
 }
 
 run().catch((e) => {

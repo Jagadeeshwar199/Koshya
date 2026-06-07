@@ -7,9 +7,9 @@ const {
   formatReminderCancelConfirmation
 } = require('../formatters/reminderFormatter')
 const {
-  formatSubscriptionOption,
-  formatSubscriptionRemoved
-} = require('../formatters/subscriptionFormatter')
+  isPositiveConfirmation,
+  isNegativeConfirmation
+} = require('./pendingConfirmationService')
 
 const TTL_MS = 10 * 60 * 1000
 const DELETE_MENU = `What should I delete?
@@ -30,10 +30,10 @@ function confirmPrompt(scope) {
     all_subscriptions: 'all subscriptions',
     everything: 'everything (reminders and subscriptions)'
   }
-  return `⚠️ This will delete ${labels[scope]}.
+  return `⚠️ This will remove ${labels[scope]}.
 
-Reply exactly:
-DELETE ALL`
+Are you sure?
+(yes/no)`
 }
 
 function parseDeleteAll(text) {
@@ -186,28 +186,45 @@ async function handleDeletePickReply(sender, text, state) {
   return deleteTarget(sender, target)
 }
 
+async function executeDeleteAll(sender, scope) {
+  let count = 0
+  if (scope === 'all_reminders' || scope === 'everything') {
+    const reminders = await getActiveReminders(sender)
+    for (const r of reminders) {
+      await cancelReminder(r.id)
+      count++
+    }
+  }
+  if (scope === 'all_subscriptions' || scope === 'everything') {
+    const subs = await getUserSubscriptions(sender)
+    for (const s of subs) {
+      await archiveSubscription(s.id)
+      count++
+    }
+  }
+  return count
+}
+
 async function handlePendingDeleteReply(sender, text, state) {
   if (expired(state)) {
     await clearState(sender)
     const reply = await sendWhatsAppMessage(sender, 'Confirmation expired. Try again.')
     return { ok: true, replySent: reply.success }
   }
-  if (String(text || '').trim() === 'DELETE ALL') {
+  if (isPositiveConfirmation(text)) {
     await clearState(sender)
+    await executeDeleteAll(sender, state.delete_scope)
     const labels = {
-      all_reminders: 'All reminders',
-      all_subscriptions: 'All subscriptions',
-      everything: 'Everything'
+      all_reminders: 'All reminders removed',
+      all_subscriptions: 'All subscriptions removed',
+      everything: 'Everything removed'
     }
-    const reply = await sendWhatsAppMessage(
-      sender,
-      `✅ ${labels[state.delete_scope]} — confirmed. (Nothing deleted yet.)`
-    )
+    const reply = await sendWhatsAppMessage(sender, `✅ ${labels[state.delete_scope]}.`)
     return { ok: true, pending_delete_confirmed: state.delete_scope, replySent: reply.success }
   }
-  if (/^(no|cancel|stop)$/i.test(String(text || '').trim())) {
+  if (isNegativeConfirmation(text)) {
     await clearState(sender)
-    const reply = await sendWhatsAppMessage(sender, 'Cancelled. No changes made.')
+    const reply = await sendWhatsAppMessage(sender, 'Cancelled.')
     return { ok: true, cancelled: true, replySent: reply.success }
   }
   const reply = await sendWhatsAppMessage(sender, confirmPrompt(state.delete_scope))

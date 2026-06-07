@@ -8,11 +8,24 @@ function isGreetingMessage(text) {
   return /^(hi|hello|hey|start)$/i.test(String(text || '').trim())
 }
 
+function isPositiveConfirmation(text) {
+  const t = String(text || '').trim().toLowerCase()
+  return (
+    /^(yes|y|ok|okay|confirm|sure|do it|delete them|proceed)$/.test(t) ||
+    /^(yes|ok|sure)[,!\s]/.test(t)
+  )
+}
+
+function isNegativeConfirmation(text) {
+  const t = String(text || '').trim().toLowerCase()
+  return /^(no|cancel|stop)$/.test(t) || /\bdon'?t\b/.test(t)
+}
+
 function shouldApplyPendingConfirmation(intent, text) {
   const t = String(text || '').trim()
   if (isGreetingMessage(t) || intent?.intent === INTENTS.HELP) return false
-  if (intent?.intent === INTENTS.CONFIRM) return true
-  if (/^(yes|y|ok|okay|confirm)$/i.test(t)) return true
+  if (isNegativeConfirmation(t) || intent?.intent === INTENTS.CANCEL) return false
+  if (isPositiveConfirmation(t) || intent?.intent === INTENTS.CONFIRM) return true
   if (
     intent?.entities?.date &&
     intent.intent !== INTENTS.REMINDER_CREATE &&
@@ -88,6 +101,8 @@ module.exports = {
   PENDING_TTL_MS,
   isExecutablePendingOverrideIntent,
   isGreetingMessage,
+  isPositiveConfirmation,
+  isNegativeConfirmation,
   shouldApplyPendingConfirmation,
   setPendingConfirmation,
   getPendingConfirmation,
