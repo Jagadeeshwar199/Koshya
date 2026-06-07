@@ -622,9 +622,6 @@ function getMissing(draft) {
   if (!draft.serviceName) {
     missing.push('serviceName')
   }
-  if (!draft.amount) {
-    missing.push('amount')
-  }
   if (!draft.recurrence) {
     missing.push('recurrence')
   }

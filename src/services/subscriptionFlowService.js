@@ -21,9 +21,6 @@ function buildQuestions(missing) {
   if (missing.includes('serviceName')) {
     lines.push('• Which service? (e.g. Netflix, Spotify)')
   }
-  if (missing.includes('amount')) {
-    lines.push('• What amount in ₹? (e.g. 149)')
-  }
   if (missing.includes('recurrence')) {
     lines.push('• How often? Reply: monthly, yearly, or every 3 months')
   }

@@ -50,6 +50,21 @@ function nextLine(fields) {
   return `Next: ${date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`
 }
 
+function formatScheduleShort(fields) {
+  const cycle =
+    fields.recurrence === 'monthly'
+      ? 'Every month'
+      : fields.recurrence === 'yearly'
+        ? 'Every year'
+        : fields.recurrence
+          ? `Every ${fields.recurrence}`
+          : ''
+  if (cycle && fields.renewalDay) {
+    return `${cycle} · ${ordinal(fields.renewalDay)}`
+  }
+  return scheduleLine(fields)
+}
+
 function formatSubscription(subscription) {
   const fields = {
     renewalDay: subscription.renewalDay,
@@ -57,22 +72,27 @@ function formatSubscription(subscription) {
     recurrence: subscription.recurrence
   }
   const line2 = nextLine(fields) || scheduleLine(fields)
-  const head = `• ${subscription.serviceName} — ₹${subscription.amount}/${cycleLabel(subscription.recurrence)}`
+  const head =
+    subscription.amount != null
+      ? `• ${subscription.serviceName} — ₹${subscription.amount}/${cycleLabel(subscription.recurrence)}`
+      : `• ${subscription.serviceName}`
   return line2 ? `${head}\n${line2}` : head
 }
 
 function formatSubscriptionAdded(parsed) {
-  return `✅ Subscription added
-
-${parsed.serviceName}
-₹${parsed.amount}/${cycleLabel(parsed.recurrence)}`
+  const lines = ['✅ Subscription set', '', parsed.serviceName]
+  const schedule = formatScheduleShort(parsed)
+  if (schedule) lines.push(schedule)
+  if (parsed.amount != null) lines.push(`₹${parsed.amount}`)
+  return lines.join('\n')
 }
 
 function formatSubscriptionUpdated(subscription) {
-  return `✅ Subscription updated
-
-${subscription.serviceName}
-₹${subscription.amount}/${cycleLabel(subscription.recurrence)}`
+  const lines = ['✅ Subscription updated', '', subscription.serviceName]
+  const schedule = formatScheduleShort(subscription)
+  if (schedule) lines.push(schedule)
+  if (subscription.amount != null) lines.push(`₹${subscription.amount}`)
+  return lines.join('\n')
 }
 
 function formatSubscriptionRemoved(subscription) {

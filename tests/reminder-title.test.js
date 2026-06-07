@@ -11,17 +11,17 @@ assert.equal(detectIntent('Delete Spotify').entities.serviceName, 'Spotify')
 
 assert.equal(
   extractReminderTitle('Remind me to call Raj in the evening'),
-  'call Raj'
+  'Call Raj'
 )
 
 assert.equal(
   extractReminderTitle('Remind me to renew driving licence tomorrow'),
-  'renew driving licence'
+  'Renew driving licence'
 )
 
 assert.equal(
   extractReminderTitle('Remind me to renew Netflix on 27th at 10 am'),
-  'renew Netflix'
+  'Renew Netflix'
 )
 
 assert.equal(
@@ -29,4 +29,7 @@ assert.equal(
   undefined
 )
 
-console.log('Reminder title tests passed: 6')
+assert.equal(extractReminderTitle('remind me of badminton'), 'Badminton')
+assert.equal(extractReminderTitle('remind me about rent'), 'Rent')
+
+console.log('Reminder title tests passed: 8')

@@ -33,27 +33,24 @@ assert.equal(case1.renewalDay, 23)
 
 const step1 = parseMessage('Prime monthly')
 assert.equal(step1.type, 'incomplete')
-assert.deepEqual(getMissing(step1.draft), ['amount', 'renewalDate'])
+assert.deepEqual(getMissing(step1.draft), ['renewalDate'])
 
-const case2 = simulate([
-  'Renew the prime 23 rd june monthly',
-  'Prime 199'
-])
+const case2 = simulate(['Prime monthly', '199', '23rd'])
 assert.equal(case2.success, true)
 assert.equal(case2.serviceName, 'Prime')
 assert.equal(case2.amount, 199)
 assert.equal(case2.renewalDay, 23)
 
 const renewPartial = parseMessage('Renew the prime 23 rd june monthly')
-assert.equal(renewPartial.type, 'incomplete')
-assert.deepEqual(getMissing(renewPartial.draft), ['amount'])
+assert.equal(renewPartial.success, true)
+assert.equal(renewPartial.amount, null)
 
 const netflix = parseMessage('Netflix renewls 27th every month')
-assert.equal(netflix.type, 'incomplete')
-assert.equal(netflix.draft.serviceName, 'Netflix')
-assert.equal(netflix.draft.renewalDay, 27)
-assert.equal(netflix.draft.recurrence, 'monthly')
-assert.deepEqual(getMissing(netflix.draft), ['amount'])
+assert.equal(netflix.success, true)
+assert.equal(netflix.serviceName, 'Netflix')
+assert.equal(netflix.renewalDay, 27)
+assert.equal(netflix.recurrence, 'monthly')
+assert.equal(netflix.amount, null)
 
 assert.equal(
   detectIntent('Remind me tomorw at 8 PM').intent,

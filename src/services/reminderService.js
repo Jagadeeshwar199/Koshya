@@ -411,11 +411,16 @@ function resolveTriggerAt(dateEntity, now = new Date()) {
 
 const DAILY_REMINDER_PREFIX = '[d]'
 
+function normalizeReminderTitle(title) {
+  let t = String(title || '').trim()
+  if (!t) return 'Reminder'
+  t = t.replace(/^\s*(?:of|about|for|to)\s+/i, '').trim()
+  if (!t) return 'Reminder'
+  return t.charAt(0).toUpperCase() + t.slice(1)
+}
+
 function packReminderMessage(title, options = {}) {
-  const clean = String(title || '').trim()
-  if (!clean) {
-    return 'Reminder'
-  }
+  const clean = normalizeReminderTitle(title)
   if (options.daily) {
     return `${DAILY_REMINDER_PREFIX}${clean}`
   }
@@ -468,7 +473,7 @@ function extractReminderTitle(message, serviceName) {
     !/^(?:in|after)$/i.test(serviceName) &&
     !/\bremind\s+me\s+(?:to|about)\b/i.test(message)
   ) {
-    return serviceName
+    return normalizeReminderTitle(serviceName)
   }
 
   const offsetLead = String(message || '').match(
@@ -477,7 +482,7 @@ function extractReminderTitle(message, serviceName) {
   if (offsetLead?.[1]) {
     const title = stripReminderSchedulingWords(offsetLead[1])
     if (title && title.length >= 3 && !/^(?:in|after)$/i.test(title)) {
-      return title
+      return normalizeReminderTitle(title)
     }
   }
 
@@ -485,7 +490,7 @@ function extractReminderTitle(message, serviceName) {
   if (everyDayLead?.[1]) {
     const title = stripReminderSchedulingWords(everyDayLead[1])
     if (title) {
-      return title
+      return normalizeReminderTitle(title)
     }
   }
 
@@ -495,15 +500,15 @@ function extractReminderTitle(message, serviceName) {
   if (dailyMatch?.[1]) {
     const title = stripReminderSchedulingWords(dailyMatch[1])
     if (title) {
-      return title
+      return normalizeReminderTitle(title)
     }
   }
 
-  const taskMatch = String(message || '').match(/\bremind\s+me\s+(?:to|about)\s+(.+)/i)
+  const taskMatch = String(message || '').match(/\bremind\s+me\s+(?:to|about|of)\s+(.+)/i)
   const rawTitle = taskMatch ? taskMatch[1] : message
   const title = stripReminderSchedulingWords(rawTitle)
 
-  return title || 'Reminder'
+  return normalizeReminderTitle(title || 'Reminder')
 }
 
 function cleanReminderSubject(message, serviceName) {
@@ -884,6 +889,7 @@ module.exports = {
   getIstPartsFromDate,
   mapReminderRow,
   extractReminderTitle,
+  normalizeReminderTitle,
   stripReminderSchedulingWords,
   packReminderMessage,
   unpackReminderMessage,

@@ -6,6 +6,7 @@ const {
   computeReminderRenewalDate
 } = require('./reminderService')
 const logger = require('../../utils/logger')
+const { displayReminderTitle } = require('../formatters/reminderFormatter')
 
 function isSubscriptionReminderDue(sub, fromDate = new Date()) {
   return Boolean(
@@ -70,7 +71,7 @@ async function processQueuedReminders() {
 
         const sendResult = await sendWhatsAppMessage(
           claimed.user_phone,
-          `⏰ Reminder: ${claimed.message}`
+          `⏰ Reminder: ${displayReminderTitle(claimed.message)}`
         )
 
         if (!sendResult.success) {

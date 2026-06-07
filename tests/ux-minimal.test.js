@@ -20,11 +20,11 @@ assert.equal(detectIntent('remove Netflix').intent, INTENTS.SUBSCRIPTION_DELETE)
 
 assert.equal(
   extractReminderTitle('remind me daily to exercise at 7pm'),
-  'exercise'
+  'Exercise'
 )
 assert.equal(
   extractReminderTitle('remind me to drink water after 8 minutes'),
-  'drink water'
+  'Drink water'
 )
 
 const now = new Date('2026-06-02T14:00:00.000Z')
@@ -53,16 +53,16 @@ assert.match(
     recurrence: 'monthly',
     renewalDay: 27
   }),
-  /₹149\/month/
+  /₹149/
 )
-assert.doesNotMatch(
+assert.match(
   formatSubscriptionAdded({
     serviceName: 'Netflix',
-    amount: 149,
+    amount: null,
     recurrence: 'monthly',
     renewalDay: 27
   }),
-  /show subscriptions/
+  /Every month · 27th/
 )
 
 console.log('ux-minimal tests passed')

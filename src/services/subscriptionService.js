@@ -115,7 +115,10 @@ function subscriptionToRow(subscription) {
   return {
     user_phone: normalizePhone(subscription.userPhone),
     service_name: validateServiceName(subscription.serviceName),
-    amount: validateAmount(subscription.amount),
+    amount:
+      subscription.amount == null || subscription.amount === ''
+        ? null
+        : validateAmount(subscription.amount),
     renewal_day:
       subscription.renewalDay === undefined
         ? null

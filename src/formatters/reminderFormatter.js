@@ -1,5 +1,5 @@
 const { computeNextRenewalDate, resolveTriggerAt } = require('../services/reminderService')
-const { unpackReminderMessage } = require('../services/reminderService')
+const { unpackReminderMessage, normalizeReminderTitle } = require('../services/reminderService')
 
 function getIstParts(date) {
   const formatter = new Intl.DateTimeFormat('en-IN', {
@@ -83,10 +83,7 @@ function formatReminderScheduleLine(reminder, now = new Date()) {
 
 function displayReminderTitle(message) {
   const { title } = unpackReminderMessage(message)
-  if (!title) {
-    return 'Reminder'
-  }
-  return title.charAt(0).toUpperCase() + title.slice(1)
+  return normalizeReminderTitle(title)
 }
 
 function formatReminderListTime(triggerAt, now = new Date()) {

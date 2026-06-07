@@ -1,24 +1,29 @@
 const assert = require('node:assert/strict')
+process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://127.0.0.1:54321'
+process.env.SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'test-key'
 const { parseMessage, getMissing } = require('../src/services/parserCore')
-
-function expectAmountAsk(text) {
-  const r = parseMessage(text)
-  assert.equal(r.type, 'incomplete')
-  assert.equal(r.draft.amount, null)
-  assert.ok(getMissing(r.draft).includes('amount'))
-}
+const { formatSubscriptionAdded } = require('../src/formatters/subscriptionFormatter')
 
 const full199 = parseMessage('Prime 199 monthly on 23rd')
 assert.equal(full199.success, true)
 assert.equal(full199.amount, 199)
 assert.equal(full199.renewalDay, 23)
 
-expectAmountAsk('Prime renews on 23rd every month')
-expectAmountAsk('Renew the prime 23 rd june monthly')
+const noAmount = parseMessage('Netflix renews on 27th every month')
+assert.equal(noAmount.success, true)
+assert.equal(noAmount.serviceName, 'Netflix')
+assert.equal(noAmount.renewalDay, 27)
+assert.equal(noAmount.amount, null)
+assert.ok(!getMissing(noAmount).includes('amount'))
 
-const netflix = parseMessage('Netflix 149 monthly on 27th')
-assert.equal(netflix.success, true)
-assert.equal(netflix.amount, 149)
-assert.equal(netflix.renewalDay, 27)
+const withAmount = parseMessage('Netflix renews on 27th every month for ₹649')
+assert.equal(withAmount.success, true)
+assert.equal(withAmount.amount, 649)
+
+assert.match(formatSubscriptionAdded(noAmount), /✅ Subscription set/)
+assert.match(formatSubscriptionAdded(noAmount), /Every month · 27th/)
+assert.doesNotMatch(formatSubscriptionAdded(noAmount), /₹/)
+
+assert.match(formatSubscriptionAdded(withAmount), /₹649/)
 
 console.log('subscription-amount tests passed')

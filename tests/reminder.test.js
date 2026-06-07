@@ -131,7 +131,7 @@ for (const [phrase, minutes] of offsetCases) {
 
 assert.equal(
   extractReminderTitle('Remind me to drink water after 2 minutes'),
-  'drink water'
+  'Drink water'
 )
 assert.equal(extractReminderTitle('Call mom in 1 hour'), 'Call mom')
 
