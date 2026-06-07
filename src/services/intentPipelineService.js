@@ -302,7 +302,10 @@ async function stageExecute(ctx, actionType, fn) {
 
 async function processClause(ctx, text, executeFn) {
   if (!useLegacyEngine()) {
-    const intent = await stageDetect(ctx, text)
+    let intent = await stageDetect(ctx, text)
+    const { coerceIntentForLastEntity } = require('./entityUpdateCoercion')
+    intent = await coerceIntentForLastEntity(ctx.userId, intent, text)
+    if (ctx.lastDetection) ctx.lastDetection.intent = intent
     const det = ctx.lastDetection
     if (
       det?.decision === Decision.CLARIFY &&

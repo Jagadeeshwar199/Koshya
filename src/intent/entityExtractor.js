@@ -5,6 +5,12 @@ const MONTH_PATTERN =
 const WEEKDAY_PATTERN =
   '(sunday|monday|tuesday|wednesday|thursday|friday|saturday)'
 
+const CORRECTION_WORDS = new Set(['sorry', 'actually', 'instead', 'change', 'move', 'make', 'make it', 'oops'])
+
+function isCorrectionEntityName(value) {
+  return CORRECTION_WORDS.has(String(value || '').toLowerCase().trim())
+}
+
 function titleCase(value) {
   return String(value)
     .split(/\s+/)
@@ -14,7 +20,7 @@ function titleCase(value) {
 }
 
 function cleanEntity(value) {
-  if (!value) {
+  if (!value || isCorrectionEntityName(value)) {
     return null
   }
 
@@ -415,7 +421,7 @@ function extractServiceName(text) {
   }
 
   const catalog = extractServiceCandidate(text)
-  if (catalog) {
+  if (catalog && !isCorrectionEntityName(catalog) && !BLOCKED_SERVICE_NAMES.has(catalog.toLowerCase())) {
     registerService(catalog)
     return catalog
   }
@@ -425,7 +431,8 @@ function extractServiceName(text) {
 
 const BLOCKED_SERVICE_NAMES = new Set([
   'need', 'must', 'should', 'call', 'pay', 'buy', 'doctor', 'appointment', 'me', 'my',
-  'remind me to', 'remind me', 'remaind', 'remind mom', 'driving licence', 'driving license', 'before', 'after'
+  'remind me to', 'remind me', 'remaind', 'remind mom', 'driving licence', 'driving license', 'before', 'after',
+  'sorry', 'actually', 'instead', 'change', 'move', 'make', 'make it', 'oops'
 ])
 
 function extractActionText(text) {
@@ -481,5 +488,7 @@ module.exports = {
   extractActionText,
   extractOffset,
   cleanEntity,
-  titleCase
+  titleCase,
+  isCorrectionEntityName,
+  CORRECTION_WORDS
 }

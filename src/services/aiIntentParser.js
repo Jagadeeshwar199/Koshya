@@ -76,11 +76,13 @@ function assertPromptBuilt(prompt) {
 function normalizeEntities(obj) {
   const e = obj && typeof obj === 'object' ? obj : {}
   const out = {}
-  if (e.serviceName || e.service) out.serviceName = e.serviceName || e.service
+  const { isCorrectionEntityName } = require('../intent/entityExtractor')
+  const sn = e.serviceName || e.service
+  if (sn && !isCorrectionEntityName(sn)) out.serviceName = sn
   if (e.amount != null) out.amount = Number(e.amount)
-  if (e.actionText || e.title) out.actionText = e.actionText || e.title
+  const title = e.actionText || e.title || e.task
+  if (title && !isCorrectionEntityName(title)) out.actionText = title
   if (e.date) out.date = e.date
-  if (e.task) out.actionText = out.actionText || e.task
   if (e.time) out.time = e.time
   if (e.recurrence) out.recurrence = e.recurrence
   return out

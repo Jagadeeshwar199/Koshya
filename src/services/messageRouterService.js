@@ -50,14 +50,26 @@ async function routeDetectedIntent(sender, text, intent, options = {}, meta = {}
     const { handleDetectionClarify } = require('../controllers/queryController')
     return handleDetectionClarify(sender, intent, meta.clarificationText)
   }
+
+  intent = await coerceIntentForLastEntity(sender, intent, text)
+
+  if (meta.validationFailed) {
+    if (
+      intent.intent !== INTENTS.UNKNOWN &&
+      (intent.lastEntityId ||
+        intent.intent === INTENTS.REMINDER_RESCHEDULE ||
+        intent.intent === INTENTS.SUBSCRIPTION_UPDATE)
+    ) {
+      meta = { ...meta, validationFailed: false }
+    }
+  }
+
   if (meta.validationFailed) {
     if (meta.validationError === 'missing_reminder_subject') {
       return handleReminderCreateIntent(sender, text, intent)
     }
     return handleClarifyIntent(sender, intent)
   }
-
-  intent = await coerceIntentForLastEntity(sender, intent, text)
 
   if (intent.entities.clarify === 'short') {
     return handleUnknownIntent(sender, intent, text)

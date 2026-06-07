@@ -39,9 +39,10 @@ function validateIntentName(intent) {
 
 function formatFromExecution(intentName, execResult) {
   if (!execResult || execResult.ok === false) return null
+  const executed = execResult.intent || intentName
   if (execResult.reminder) {
-    if (intentName === INTENTS.REMINDER_CANCEL) return formatReminderCancelConfirmation(execResult.reminder)
-    if (intentName === INTENTS.REMINDER_UPDATE || intentName === INTENTS.REMINDER_RESCHEDULE) {
+    if (executed === INTENTS.REMINDER_CANCEL) return formatReminderCancelConfirmation(execResult.reminder)
+    if (executed === INTENTS.REMINDER_UPDATE || executed === INTENTS.REMINDER_RESCHEDULE) {
       return formatReminderUpdateConfirmation(execResult.reminder)
     }
     return formatReminderConfirmation(execResult.reminder)
@@ -72,14 +73,15 @@ function hintFromGemini(geminiRaw) {
 
 function buildKoshyaResponse({ intent, entities, geminiRaw, execResult, validationOk }) {
   const geminiStored = geminiRaw ? String(geminiRaw) : null
-  if (!validateIntentName(intent)) {
+  const executedIntent = execResult?.intent || intent
+  if (!validateIntentName(executedIntent)) {
     return { text: clampLines(unknownReply(entities?.rawText || '')), geminiStored }
   }
   if (!validationOk) {
     const clarify = clarifyLowConfidence(intent) || unknownReply('')
     return { text: clampLines(clarify), geminiStored }
   }
-  const fromExec = formatFromExecution(intent, execResult)
+  const fromExec = formatFromExecution(executedIntent, execResult)
   if (fromExec) return { text: clampLines(fromExec), geminiStored }
   const hint = hintFromGemini(geminiRaw)
   if (hint) return { text: hint, geminiStored }

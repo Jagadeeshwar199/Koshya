@@ -1,5 +1,6 @@
 const { INTENTS, detectIntent } = require('./intentService')
 const { getLastEntity } = require('./entityContextService')
+const { isCorrectionEntityName } = require('../intent/entityExtractor')
 
 function extractDayFromText(text) {
   const m = String(text || '').match(/\b(\d{1,2})(?:st|nd|rd|th)?\b/i)
@@ -8,7 +9,14 @@ function extractDayFromText(text) {
 }
 
 function isFollowUpUpdatePhrase(text) {
-  return /^(sorry|actually|oops|change|move|make it)\b/i.test(String(text || '').trim())
+  return /^(sorry|actually|instead|change|move|make it|oops)\b/i.test(String(text || '').trim())
+}
+
+function scrubCorrectionEntities(entities) {
+  const out = { ...(entities || {}) }
+  if (isCorrectionEntityName(out.serviceName)) delete out.serviceName
+  if (isCorrectionEntityName(out.actionText)) delete out.actionText
+  return out
 }
 
 async function coerceIntentForLastEntity(sender, intent, text) {
@@ -30,9 +38,11 @@ async function coerceIntentForLastEntity(sender, intent, text) {
     return {
       ...intent,
       intent: INTENTS.REMINDER_RESCHEDULE,
-      entities: { ...det.entities, ...intent.entities, date: dateEntity },
+      entities: scrubCorrectionEntities({ ...det.entities, ...intent.entities, date: dateEntity }),
       confidence: Math.max(Number(intent.confidence) || 0, 0.9),
-      lastEntityId: last.id
+      lastEntityId: last.id,
+      ai_intent: 'UPDATE_REMINDER',
+      execution_intent: INTENTS.REMINDER_RESCHEDULE
     }
   }
 

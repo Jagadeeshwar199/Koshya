@@ -63,6 +63,7 @@ async function applyAiFallback(ctx, det) {
   const raw = ctx?.rawMessage || det.message
   const ruleIntent = detectionToIntent(det)
   const { INTENTS } = require('../services/intentService')
+  const { coerceIntentForLastEntity } = require('../services/entityUpdateCoercion')
   logger.info('AI_FALLBACK', { message: raw, rule_intent: ruleIntent.intent })
   let conversationState = null
   let attachLastEntityId = (intent) => intent
@@ -90,7 +91,53 @@ async function applyAiFallback(ctx, det) {
     token_usage: ai.token_usage,
     gemini_response: ai.userResponse
   }
+  const trace = (intent, extra = {}) => ({
+    ...baseLearning,
+    final_intent: intent.intent,
+    execution_intent: intent.execution_intent || intent.intent,
+    last_entity_id: intent.lastEntityId || conversationState?.last_entity_id || null,
+    entities: intent.entities,
+    confidence: extra.confidence ?? confPct,
+    used_ai: extra.used_ai !== false,
+    ai_intent: extra.ai_intent ?? baseLearning.ai_intent,
+    failure_reason: extra.failure_reason ?? null
+  })
+
   if (!ai.success || !ai.ai_intent || ai.ai_intent === INTENTS.UNKNOWN) {
+    if (ctx?.userId) {
+      const coerced = await coerceIntentForLastEntity(
+        ctx.userId,
+        { ...ruleIntent, rawText: raw, intent: ruleIntent.intent },
+        raw
+      )
+      if (
+        coerced.lastEntityId &&
+        (coerced.intent === INTENTS.REMINDER_RESCHEDULE || coerced.intent === INTENTS.SUBSCRIPTION_UPDATE)
+      ) {
+        logger.info('UPDATE_FLOW', {
+          message: raw,
+          rule_intent: ruleIntent.intent,
+          ai_intent: coerced.ai_intent || 'UPDATE_REMINDER',
+          final_intent: coerced.intent,
+          execution_intent: coerced.execution_intent || coerced.intent,
+          last_entity_id: coerced.lastEntityId
+        })
+        return {
+          ...det,
+          route_source: RouteSource.RULE,
+          intent: coerced,
+          usedAI: Boolean(ai.success),
+          aiMeta: ai,
+          decision: Decision.EXECUTE,
+          canExecute: true,
+          pendingLearning: trace(coerced, {
+            ai_intent: coerced.ai_intent || 'UPDATE_REMINDER',
+            used_ai: Boolean(ai.success),
+            confidence: 90
+          })
+        }
+      }
+    }
     return {
       ...det,
       route_source: RouteSource.UNKNOWN,
@@ -99,14 +146,10 @@ async function applyAiFallback(ctx, det) {
       aiMeta: ai,
       decision: Decision.AI_FALLBACK,
       canExecute: false,
-      pendingLearning: {
-        ...baseLearning,
-        final_intent: INTENTS.UNKNOWN,
-        entities: ruleIntent.entities,
-        confidence: det.scorePercent,
-        used_ai: true,
-        failure_reason: ai.failure_reason
-      }
+      pendingLearning: trace(
+        { intent: INTENTS.UNKNOWN, entities: ruleIntent.entities },
+        { used_ai: true, confidence: det.scorePercent, failure_reason: ai.failure_reason }
+      )
     }
   }
   const intent = attachLastEntityId(
@@ -115,10 +158,20 @@ async function applyAiFallback(ctx, det) {
       confidence: Number(ai.confidence),
       rawText: raw,
       entities: { ...ruleIntent.entities, ...(ai.entities || {}) },
-      source: 'ai'
+      source: 'ai',
+      ai_intent: ai.raw_ai_intent || 'UPDATE_REMINDER',
+      execution_intent: ai.ai_intent
     },
     conversationState
   )
+  logger.info('UPDATE_FLOW', {
+    message: raw,
+    rule_intent: ruleIntent.intent,
+    ai_intent: baseLearning.ai_intent,
+    final_intent: intent.intent,
+    execution_intent: intent.execution_intent || intent.intent,
+    last_entity_id: intent.lastEntityId || conversationState?.last_entity_id || null
+  })
   return {
     ...det,
     route_source: RouteSource.GEMINI,
@@ -129,13 +182,7 @@ async function applyAiFallback(ctx, det) {
     scorePercent: confPct,
     decision: Decision.EXECUTE,
     canExecute: true,
-    pendingLearning: {
-      ...baseLearning,
-      final_intent: intent.intent,
-      entities: intent.entities,
-      confidence: confPct,
-      used_ai: true
-    }
+    pendingLearning: trace(intent, { used_ai: true })
   }
 }
 

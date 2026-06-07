@@ -37,4 +37,30 @@ const exec = buildKoshyaResponse({
 assert.ok(exec.text.startsWith('✅'))
 assert.ok(!exec.text.includes('ignore me'))
 
-console.log('Koshya response layer tests passed: 4')
+const createViaExec = buildKoshyaResponse({
+  intent: INTENTS.REMINDER_RESCHEDULE,
+  entities: {},
+  geminiRaw: null,
+  execResult: {
+    ok: true,
+    intent: INTENTS.REMINDER_CREATE,
+    reminder: { message: 'wake up', triggerAt: new Date('2026-06-06T06:00:00Z').toISOString() }
+  },
+  validationOk: true
+})
+assert.match(createViaExec.text, /Reminder set/)
+
+const updateViaExec = buildKoshyaResponse({
+  intent: INTENTS.REMINDER_CREATE,
+  entities: {},
+  geminiRaw: null,
+  execResult: {
+    ok: true,
+    intent: INTENTS.REMINDER_RESCHEDULE,
+    reminder: { message: 'wake up', triggerAt: new Date('2026-06-06T06:00:00Z').toISOString() }
+  },
+  validationOk: true
+})
+assert.match(updateViaExec.text, /Reminder updated/)
+
+console.log('Koshya response layer tests passed: 6')

@@ -15,7 +15,7 @@ const {
   DEFAULT_FUZZY_THRESHOLD
 } = require('./semanticDictionaries')
 const { groupScore } = require('./fuzzyMatcher')
-const { extractEntities, extractOffset } = require('./entityExtractor')
+const { extractEntities, extractOffset, isCorrectionEntityName } = require('./entityExtractor')
 
 const INTENTS = {
   SUBSCRIPTION_CREATE: 'SUBSCRIPTION_CREATE',
@@ -972,11 +972,15 @@ function buildResult(intent, confidence, text, entities, extra = {}) {
     rawText: text,
     ...(match_details ? { match_details } : {}),
     entities: {
-      ...(entities.serviceName ? { serviceName: entities.serviceName } : {}),
+      ...(entities.serviceName && !isCorrectionEntityName(entities.serviceName)
+        ? { serviceName: entities.serviceName }
+        : {}),
       ...(entities.amount ? { amount: entities.amount } : {}),
       ...(entities.date ? { date: entities.date } : {}),
       ...(entities.recurrence ? { recurrence: entities.recurrence } : {}),
-      ...(entities.actionText ? { actionText: entities.actionText } : {}),
+      ...(entities.actionText && !isCorrectionEntityName(entities.actionText)
+        ? { actionText: entities.actionText }
+        : {}),
       ...entityExtra
     }
   }

@@ -1,5 +1,11 @@
 const { similarity } = require('./fuzzyMatcher')
 
+const CORRECTION_WORDS = new Set(['sorry', 'actually', 'instead', 'change', 'move', 'make', 'make it', 'oops'])
+
+function isCorrectionEntityName(value) {
+  return CORRECTION_WORDS.has(String(value || '').toLowerCase().trim())
+}
+
 const SEED_SERVICES = [
   'Netflix', 'Spotify', 'Prime', 'Amazon Prime', 'JioHotstar', 'Hotstar',
   'Disney', 'YouTube', 'YouTube Premium', 'ChatGPT', 'OpenAI', 'Google One',
@@ -54,6 +60,9 @@ function extractServiceCandidate(text) {
 
   for (const pattern of patterns) {
     const match = text.match(pattern)
+    if (match?.[1] && isCorrectionEntityName(match[1].trim())) {
+      continue
+    }
     if (match?.[1]) {
       return match[1].trim()
     }
