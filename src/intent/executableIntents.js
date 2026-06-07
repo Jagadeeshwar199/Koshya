@@ -1,0 +1,47 @@
+const { INTENTS } = require('./intentDetector')
+
+const EXECUTABLE_OVERRIDE_INTENTS = new Set([
+  INTENTS.REMINDER_CREATE,
+  INTENTS.SUBSCRIPTION_CREATE,
+  INTENTS.REMINDER_UPDATE,
+  INTENTS.REMINDER_RESCHEDULE,
+  INTENTS.SUBSCRIPTION_UPDATE,
+  INTENTS.REMINDER_CANCEL,
+  INTENTS.SUBSCRIPTION_DELETE,
+  INTENTS.DELETE_ENTITY,
+  INTENTS.REMINDER_QUERY,
+  INTENTS.SUBSCRIPTION_QUERY,
+  INTENTS.SUBSCRIPTION_EXPIRY,
+  INTENTS.LIST_MORE
+])
+
+const COERCE_PASSTHROUGH_INTENTS = new Set([
+  INTENTS.REMINDER_CREATE,
+  INTENTS.SUBSCRIPTION_CREATE,
+  INTENTS.SUBSCRIPTION_UPDATE,
+  INTENTS.REMINDER_CANCEL,
+  INTENTS.SUBSCRIPTION_DELETE,
+  INTENTS.DELETE_ENTITY,
+  INTENTS.REMINDER_QUERY,
+  INTENTS.SUBSCRIPTION_QUERY,
+  INTENTS.LIST_MORE
+])
+
+function isExecutablePendingOverrideIntent(intent) {
+  return Boolean(intent?.intent && EXECUTABLE_OVERRIDE_INTENTS.has(intent.intent))
+}
+
+function isCoercePassthroughIntent(intent, text = '') {
+  if (!intent?.intent || !COERCE_PASSTHROUGH_INTENTS.has(intent.intent)) return false
+  if (intent.intent === INTENTS.REMINDER_CREATE && !/\bremind\s+me\b/i.test(String(text || ''))) {
+    return false
+  }
+  return true
+}
+
+module.exports = {
+  isExecutablePendingOverrideIntent,
+  isCoercePassthroughIntent,
+  EXECUTABLE_OVERRIDE_INTENTS,
+  COERCE_PASSTHROUGH_INTENTS
+}

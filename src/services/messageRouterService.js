@@ -40,9 +40,9 @@ const { detectAndPlan } = require('../detection/detectionEngine')
 const { coerceIntentForLastEntity, CLARIFY_UPDATE } = require('./entityUpdateCoercion')
 const {
   getPendingConfirmation,
-  isConfirmReply,
-  isDeclineReply,
-  buildIntentFromPending
+  clearPendingConfirmation,
+  isExecutablePendingOverrideIntent,
+  resolvePendingAction
 } = require('./pendingConfirmationService')
 async function resolveIntent(ctx, text) {
   if (useLegacyEngine()) {
@@ -176,20 +176,28 @@ async function routeWhatsAppMessageCore(sender, text, options = {}, ctx = null) 
   const pendingConfirm = await getPendingConfirmation(sender)
   if (pendingConfirm) {
     const intent = await resolveIntent(ctx, text)
-    if (isConfirmReply(text) || intent.intent === INTENTS.CONFIRM) {
-      return intentPipeline.stageExecute(ctx, 'update_confirm', async () => {
-        const updateIntent = await buildIntentFromPending(sender)
-        if (!updateIntent) {
-          return handleUnknownIntent(sender, { intent: INTENTS.UNKNOWN, entities: {} }, text)
-        }
-        return handleReminderUpdateIntent(sender, updateIntent)
-      })
+    if (isExecutablePendingOverrideIntent(intent)) {
+      await clearPendingConfirmation(sender)
+      if (ctx) {
+        return intentPipeline.processClause(ctx, text, (_detected, meta) =>
+          routeDetectedIntent(sender, text, intent, options, meta)
+        )
+      }
+      return routeDetectedIntent(sender, text, intent, options)
     }
-    if (isDeclineReply(text) || intent.intent === INTENTS.CANCEL) {
+    if (intent.intent === INTENTS.CANCEL) {
+      await clearPendingConfirmation(sender)
       return intentPipeline.stageExecute(ctx, 'update_decline', () =>
         handlePendingConfirmationDecline(sender)
       )
     }
+    return intentPipeline.stageExecute(ctx, 'update_confirm', async () => {
+      const updateIntent = await resolvePendingAction(sender, intent)
+      if (!updateIntent) {
+        return handleUnknownIntent(sender, { intent: INTENTS.UNKNOWN, entities: {} }, text)
+      }
+      return handleReminderUpdateIntent(sender, updateIntent)
+    })
   }
 
   if (pendingState?.action === 'confirm_delete') {

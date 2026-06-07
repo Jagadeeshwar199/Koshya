@@ -53,6 +53,7 @@ const { coerceIntentForLastEntity, CLARIFY_UPDATE } = require('../src/services/e
 const { buildKoshyaResponse } = require('../src/services/koshyaResponseLayer')
 const { routeDetectedIntent, routeWhatsAppMessage } = require('../src/services/messageRouterService')
 const { handleClarifyUpdate } = require('../src/controllers/queryController')
+const { isExecutablePendingOverrideIntent } = require('../src/intent/executableIntents')
 const { getPendingConfirmation, PENDING_TTL_MS } = require('../src/services/pendingConfirmationService')
 
 const phone = '919999999999'
@@ -123,26 +124,38 @@ stateByPhone[phone] = {
   const ambiguous = await coerceIntentForLastEntity(phone, detectIntent('actually tomorrow'), 'actually tomorrow')
   assert.equal(ambiguous.intent, CLARIFY_UPDATE)
   await handleClarifyUpdate(phone, ambiguous)
-  assert.equal(stateByPhone[phone].pending_confirmation, true)
+  assert.equal(stateByPhone[phone].pending_action, true)
   assert.equal(stateByPhone[phone].pending_intent, INTENTS.REMINDER_RESCHEDULE)
   assert.equal(stateByPhone[phone].target_id, '123')
   assert.ok(stateByPhone[phone].proposed_changes?.date)
 
-  const yesResult = await routeWhatsAppMessage(phone, 'yes')
-  assert.equal(yesResult.intent, INTENTS.REMINDER_RESCHEDULE)
-  assert.equal(updateCalls, 1)
-  assert.equal(stateByPhone[phone].pending_confirmation, undefined)
+  for (const msg of ['yes', 'ok', 'tomorrow']) {
+    await handleClarifyUpdate(phone, ambiguous)
+    const result = await routeWhatsAppMessage(phone, msg)
+    assert.equal(result.intent, INTENTS.REMINDER_RESCHEDULE, msg)
+    assert.equal(updateCalls, 1, msg)
+    assert.equal(stateByPhone[phone].pending_action, undefined, msg)
+    updateCalls = 0
+  }
+
+  await handleClarifyUpdate(phone, ambiguous)
+  const subIntent = detectIntent('Netflix renews on 27th every month - 149')
+  assert.ok(isExecutablePendingOverrideIntent(subIntent))
+  const subResult = await routeWhatsAppMessage(phone, 'Netflix renews on 27th every month - 149')
+  assert.equal(subResult.intent, INTENTS.SUBSCRIPTION_CREATE)
+  assert.equal(updateCalls, 0)
+  assert.equal(stateByPhone[phone].pending_action, undefined)
 
   await handleClarifyUpdate(phone, ambiguous)
   await routeWhatsAppMessage(phone, 'no')
-  assert.equal(updateCalls, 1)
-  assert.equal(stateByPhone[phone].pending_confirmation, undefined)
+  assert.equal(updateCalls, 0)
+  assert.equal(stateByPhone[phone].pending_action, undefined)
 
   await handleClarifyUpdate(phone, ambiguous)
   stateByPhone[phone].pending_at = new Date(Date.now() - PENDING_TTL_MS - 1000).toISOString()
   assert.equal(await getPendingConfirmation(phone), null)
 
-  console.log('Production bugfix tests passed: 4')
+  console.log('Production bugfix tests passed: 5')
 })().catch((e) => {
   console.error(e)
   process.exit(1)

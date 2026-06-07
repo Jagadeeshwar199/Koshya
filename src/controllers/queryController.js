@@ -17,7 +17,7 @@ const { matchSubscriptionsByService } = require('../utils/serviceMatcher')
 const { computeNextRenewalDate } = require('../services/reminderService')
 const { sendWhatsAppMessage } = require('../services/whatsappService')
 const { setState } = require('../services/conversationStateService')
-const { setPendingConfirmation, clearPendingConfirmation } = require('../services/pendingConfirmationService')
+const { setPendingConfirmation } = require('../services/pendingConfirmationService')
 const { CLARIFY_UPDATE } = require('../services/entityUpdateCoercion')
 const { getLastEntity, clearDialogueState } = require('../services/entityContextService')
 const {
@@ -334,7 +334,6 @@ async function handleClarifyUpdate(sender, intent) {
 }
 
 async function handlePendingConfirmationDecline(sender) {
-  await clearPendingConfirmation(sender)
   const reply = await sendWhatsAppMessage(sender, "Okay, I won't change it.")
   return { ok: true, intent: 'CANCEL', replySent: reply.success }
 }

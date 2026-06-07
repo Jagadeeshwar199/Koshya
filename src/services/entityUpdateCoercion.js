@@ -1,6 +1,7 @@
 const { INTENTS, detectIntent } = require('./intentService')
 const { getLastEntity } = require('./entityContextService')
 const { isCorrectionEntityName } = require('../intent/entityExtractor')
+const { isCoercePassthroughIntent } = require('../intent/executableIntents')
 
 const CLARIFY_UPDATE = 'CLARIFY_UPDATE'
 const EDIT_SIGNAL = /\b(sorry|change|move|instead|make it|reschedule|update)\b/i
@@ -48,6 +49,8 @@ function isAmbiguousUpdateCandidate(text, intent, dateEntity) {
 }
 
 async function coerceIntentForLastEntity(sender, intent, text) {
+  if (isCoercePassthroughIntent(intent, text)) return intent
+
   const last = await getLastEntity(sender)
   if (!last) return intent
 
