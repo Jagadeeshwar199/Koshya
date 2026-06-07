@@ -55,7 +55,12 @@ require.cache[require.resolve('../src/services/aiIntentParser')] = {
 require.cache[require.resolve('../src/services/entityContextService')] = {
   exports: {
     getEntityContextForAI: async () => conversationState,
-    attachLastEntityId
+    attachLastEntityId,
+    getLastEntity: async () => ({
+      id: conversationState.last_entity_id,
+      type: conversationState.last_entity_type,
+      title: conversationState.last_entity_title
+    })
   }
 }
 
@@ -63,7 +68,7 @@ const { detectAndPlan } = require('../src/detection/detectionEngine')
 const { RouteSource } = require('../src/detection/intentRouting')
 
 ;(async () => {
-  for (const msg of ['Sorry 6 am', 'Actually tomorrow', 'Move it to Friday']) {
+  for (const msg of ['Sorry 6 am', 'Move it to Friday']) {
     const det = await detectAndPlan(msg, {
       userId: '919999999999',
       rawMessage: msg,
@@ -77,6 +82,15 @@ const { RouteSource } = require('../src/detection/intentRouting')
     assert.equal(det.pendingLearning.model, 'gemini-2.5-flash', msg)
     assert.ok(det.pendingLearning.ai_response, msg)
   }
+
+  const ambiguous = await detectAndPlan('Actually tomorrow', {
+    userId: '919999999999',
+    rawMessage: 'Actually tomorrow',
+    normalized: 'actually tomorrow'
+  })
+  assert.equal(ambiguous.decision, 'CLARIFY')
+  assert.equal(ambiguous.intent.intent, 'CLARIFY_UPDATE')
+  assert.match(ambiguous.clarification, /Do you want to update your Exercise reminder\?/i)
 
   assert.ok(captured?.conversationState)
   assert.equal(captured.conversationState.last_entity_id, '123')

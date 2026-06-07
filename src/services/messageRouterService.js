@@ -35,7 +35,7 @@ const {
 const intentPipeline = require('./intentPipelineService')
 const { useLegacyEngine, splitClauses } = require('../detection/detectionEngine')
 const { detectAndPlan } = require('../detection/detectionEngine')
-const { coerceIntentForLastEntity } = require('./entityUpdateCoercion')
+const { coerceIntentForLastEntity, CLARIFY_UPDATE } = require('./entityUpdateCoercion')
 async function resolveIntent(ctx, text) {
   if (useLegacyEngine()) {
     return ctx ? intentPipeline.stageDetect(ctx, text) : detectIntent(text)
@@ -52,6 +52,11 @@ async function routeDetectedIntent(sender, text, intent, options = {}, meta = {}
   }
 
   intent = await coerceIntentForLastEntity(sender, intent, text)
+
+  if (intent.intent === CLARIFY_UPDATE) {
+    const { handleDetectionClarify } = require('../controllers/queryController')
+    return handleDetectionClarify(sender, intent, intent.clarificationText)
+  }
 
   if (meta.validationFailed) {
     if (

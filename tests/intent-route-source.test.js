@@ -24,16 +24,35 @@ require.cache[require.resolve('../src/services/aiIntentParser')] = {
   }
 }
 
+require.cache[require.resolve('../src/services/entityContextService')] = {
+  exports: {
+    getLastEntity: async () => ({
+      id: '123',
+      type: 'reminder',
+      title: 'Exercise'
+    }),
+    getEntityContextForAI: async () => null,
+    attachLastEntityId: (intent) => intent
+  }
+}
 const { detectAndPlan } = require('../src/detection/detectionEngine')
 const { RouteSource } = require('../src/detection/intentRouting')
 
 ;(async () => {
   aiCalls = 0
-  for (const msg of ['Sorry 6 am', 'Actually tomorrow', 'Move it to Friday']) {
+  for (const msg of ['Sorry 6 am', 'Move it to Friday']) {
     const d = await detectAndPlan(msg)
     assert.equal(d.route_source, RouteSource.GEMINI, msg)
   }
-  assert.equal(aiCalls, 3)
+  assert.equal(aiCalls, 2)
+
+  aiCalls = 0
+  const ambiguous = await detectAndPlan('Actually tomorrow', {
+    userId: '919999999999',
+    rawMessage: 'Actually tomorrow'
+  })
+  assert.equal(ambiguous.decision, 'CLARIFY')
+  assert.equal(aiCalls, 0)
 
   aiCalls = 0
   for (const msg of ['Show subscriptions', 'Netflix renews on 27th every month - 149']) {

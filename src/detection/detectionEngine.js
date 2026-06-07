@@ -63,7 +63,7 @@ async function applyAiFallback(ctx, det) {
   const raw = ctx?.rawMessage || det.message
   const ruleIntent = detectionToIntent(det)
   const { INTENTS } = require('../services/intentService')
-  const { coerceIntentForLastEntity } = require('../services/entityUpdateCoercion')
+  const { coerceIntentForLastEntity, CLARIFY_UPDATE } = require('../services/entityUpdateCoercion')
   logger.info('AI_FALLBACK', { message: raw, rule_intent: ruleIntent.intent })
   let conversationState = null
   let attachLastEntityId = (intent) => intent
@@ -71,6 +71,29 @@ async function applyAiFallback(ctx, det) {
     const ecs = require('../services/entityContextService')
     conversationState = await ecs.getEntityContextForAI(ctx.userId)
     attachLastEntityId = ecs.attachLastEntityId
+    const pre = await coerceIntentForLastEntity(
+      ctx.userId,
+      { ...ruleIntent, rawText: raw, intent: ruleIntent.intent },
+      raw
+    )
+    if (pre.intent === CLARIFY_UPDATE) {
+      return {
+        ...det,
+        route_source: RouteSource.RULE,
+        decision: Decision.CLARIFY,
+        clarification: pre.clarificationText,
+        intent: pre,
+        usedAI: false,
+        canExecute: false,
+        pendingLearning: {
+          message: raw,
+          rule_intent: ruleIntent.intent,
+          rule_confidence: det.scorePercent,
+          final_intent: CLARIFY_UPDATE,
+          used_ai: false
+        }
+      }
+    }
   }
   const ai = await parseWithAI({
     rawMessage: raw,
@@ -110,6 +133,19 @@ async function applyAiFallback(ctx, det) {
         { ...ruleIntent, rawText: raw, intent: ruleIntent.intent },
         raw
       )
+      if (coerced.intent === CLARIFY_UPDATE) {
+        return {
+          ...det,
+          route_source: RouteSource.RULE,
+          decision: Decision.CLARIFY,
+          clarification: coerced.clarificationText,
+          intent: coerced,
+          usedAI: Boolean(ai.success),
+          aiMeta: ai,
+          canExecute: false,
+          pendingLearning: trace(coerced, { used_ai: Boolean(ai.success), confidence: 70 })
+        }
+      }
       if (
         coerced.lastEntityId &&
         (coerced.intent === INTENTS.REMINDER_RESCHEDULE || coerced.intent === INTENTS.SUBSCRIPTION_UPDATE)
@@ -152,7 +188,7 @@ async function applyAiFallback(ctx, det) {
       )
     }
   }
-  const intent = attachLastEntityId(
+  let intent = attachLastEntityId(
     {
       intent: ai.ai_intent,
       confidence: Number(ai.confidence),
@@ -164,6 +200,22 @@ async function applyAiFallback(ctx, det) {
     },
     conversationState
   )
+  if (ctx?.userId) {
+    intent = await coerceIntentForLastEntity(ctx.userId, intent, raw)
+  }
+  if (intent.intent === CLARIFY_UPDATE) {
+    return {
+      ...det,
+      route_source: RouteSource.RULE,
+      decision: Decision.CLARIFY,
+      clarification: intent.clarificationText,
+      intent,
+      usedAI: true,
+      aiMeta: ai,
+      canExecute: false,
+      pendingLearning: trace(intent, { used_ai: true, confidence: confPct })
+    }
+  }
   logger.info('UPDATE_FLOW', {
     message: raw,
     rule_intent: ruleIntent.intent,

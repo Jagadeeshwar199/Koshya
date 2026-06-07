@@ -148,8 +148,8 @@ async function runSubscriptionFlow() {
   assert.equal(subscriptions[0].renewalDay, 27)
   assert.equal(stateByPhone[phone].last_entity_id, 'sub-1')
 
-  const updateIntent = detectIntent('actually 28th')
-  await routeDetectedIntent(phone, 'actually 28th', updateIntent)
+  const updateIntent = detectIntent('change to 28th')
+  await routeDetectedIntent(phone, 'change to 28th', updateIntent)
 
   assert.equal(subscriptions.length, 1, 'update must not create a row')
   assert.equal(subscriptions[0].id, 'sub-1')

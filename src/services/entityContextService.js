@@ -5,7 +5,11 @@ const UPDATE_INTENTS = new Set(['REMINDER_RESCHEDULE', 'REMINDER_UPDATE', 'SUBSC
 async function getLastEntity(userPhone) {
   const s = await getState(userPhone)
   if (!s?.last_entity_id) return null
-  return { id: s.last_entity_id, type: s.last_entity_type }
+  return {
+    id: s.last_entity_id,
+    type: s.last_entity_type,
+    title: s.last_entity_title || null
+  }
 }
 
 async function getEntityContextForAI(userPhone) {

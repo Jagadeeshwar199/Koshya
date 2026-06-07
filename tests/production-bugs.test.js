@@ -41,7 +41,7 @@ require.cache[require.resolve('../src/services/reminderService')] = {
 
 const { detectIntent, INTENTS } = require('../src/services/intentService')
 const { isCorrectionEntityName } = require('../src/intent/entityExtractor')
-const { coerceIntentForLastEntity } = require('../src/services/entityUpdateCoercion')
+const { coerceIntentForLastEntity, CLARIFY_UPDATE } = require('../src/services/entityUpdateCoercion')
 const { buildKoshyaResponse } = require('../src/services/koshyaResponseLayer')
 const { routeDetectedIntent } = require('../src/services/messageRouterService')
 
@@ -50,12 +50,12 @@ stateByPhone[phone] = {
   last_entity_id: '123',
   last_entity_type: 'reminder',
   last_action: 'CREATE',
-  last_entity_title: 'Exercise',
+  last_entity_title: 'badminton',
   last_entity_time: 'Tomorrow · 7:00 AM'
 }
 
 ;(async () => {
-  for (const msg of ['sorry 6 AM', 'Actually tomorrow', 'move it to Friday']) {
+  for (const msg of ['sorry 6 AM', 'move it to Friday']) {
     const rule = detectIntent(msg)
     assert.ok(!isCorrectionEntityName(rule.entities.serviceName), msg)
     const coerced = await coerceIntentForLastEntity(phone, rule, msg)
@@ -65,6 +65,13 @@ stateByPhone[phone] = {
     assert.equal(coerced.ai_intent, 'UPDATE_REMINDER', msg)
     const routed = await routeDetectedIntent(phone, msg, rule)
     assert.equal(routed.intent, INTENTS.REMINDER_RESCHEDULE, msg)
+  }
+
+  for (const msg of ['tomorrow', 'Friday', 'next week', 'actually tomorrow', 'actually Friday']) {
+    const rule = detectIntent(msg)
+    const coerced = await coerceIntentForLastEntity(phone, rule, msg)
+    assert.equal(coerced.intent, CLARIFY_UPDATE, msg)
+    assert.match(coerced.clarificationText, /Do you want to update your badminton reminder\?/i, msg)
   }
 
   assert.equal(detectIntent('Actually tomorrow').entities.serviceName, undefined)
