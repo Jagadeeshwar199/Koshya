@@ -32,6 +32,7 @@ const tests = [
   'tests/security-rollout.test.js',
   'tests/production-bugs.test.js',
   'tests/production-ux-bugs.test.js',
+  'tests/delete-flow.test.js',
   'test:ux',
   'test:api'
 ]

@@ -12,9 +12,8 @@ const {
 const {
   formatReminderCancelConfirmation
 } = require('../formatters/reminderFormatter')
-const { unpackReminderMessage } = require('../services/reminderService')
-const { matchSubscriptionsByService } = require('../utils/serviceMatcher')
 const { computeNextRenewalDate } = require('../services/reminderService')
+const { matchSubscriptionsByService } = require('../utils/serviceMatcher')
 const { sendWhatsAppMessage } = require('../services/whatsappService')
 const { setState } = require('../services/conversationStateService')
 const { setPendingConfirmation } = require('../services/pendingConfirmationService')
@@ -22,13 +21,17 @@ const { CLARIFY_UPDATE } = require('../services/entityUpdateCoercion')
 const { getLastEntity, clearDialogueState } = require('../services/entityContextService')
 const {
   formatSubscription,
-  formatSubscriptionOption,
   formatSubscriptionUpdated,
   formatSubscriptionRemoved
 } = require('../formatters/subscriptionFormatter')
 const { registerService } = require('../intent/serviceCatalog')
 const { HELP_TEXT, WELCOME_TEXT, clarifyLowConfidence, ambiguousShortReply, unknownReply } = require('../utils/uxMessages')
 const { PAGE_SIZE } = require('./paginationController')
+const {
+  startDeleteMenu,
+  showDeletePickFromCandidates,
+  isAmbiguousDelete
+} = require('../services/deleteFlowService')
 
 async function handleSubscriptionExpiryIntent(sender, intent) {
   const name = intent.entities.serviceName
@@ -206,18 +209,13 @@ async function handleSubscriptionUpdateIntent(sender, intent) {
   return { ok: true, intent: intent.intent, subscription: updated, replySent: reply.success }
 }
 
-function formatDeleteChoice(candidate) {
-  if (candidate.type === 'reminder') {
-    const { title } = unpackReminderMessage(candidate.item.message)
-    const label = title.charAt(0).toUpperCase() + title.slice(1)
-    return `• ${label} reminder`
-  }
-  return `• ${candidate.item.serviceName} membership`
-}
-
 async function handleDeleteEntityIntent(sender, intent) {
   const entityName =
     intent.entities.serviceName || extractDeleteEntity(intent.rawText)
+
+  if (/^something$/i.test(entityName || '') || isAmbiguousDelete(intent.rawText)) {
+    return startDeleteMenu(sender)
+  }
 
   const result = await resolveUnifiedDelete({
     userPhone: sender,
@@ -225,11 +223,7 @@ async function handleDeleteEntityIntent(sender, intent) {
   })
 
   if (result.status === 'needs_name') {
-    const reply = await sendWhatsAppMessage(
-      sender,
-      `Delete what?\n\nTry:\ndelete Netflix\ndelete sleep`
-    )
-    return { ok: true, intent: intent.intent, replySent: reply.success }
+    return startDeleteMenu(sender)
   }
 
   if (result.status === 'not_found') {
@@ -241,12 +235,7 @@ async function handleDeleteEntityIntent(sender, intent) {
   }
 
   if (result.status === 'multiple') {
-    const options = result.candidates.map(formatDeleteChoice).join('\n')
-    const reply = await sendWhatsAppMessage(
-      sender,
-      `I found multiple matches:\n\n${options}\n\nWhich one?`
-    )
-    return { ok: true, intent: intent.intent, replySent: reply.success }
+    return showDeletePickFromCandidates(sender, result.candidates)
   }
 
   const executed = await executeUnifiedDelete(result)
@@ -265,17 +254,7 @@ async function handleSubscriptionDeleteIntent(sender, intent) {
   })
 
   if (result.status === 'needs_service_name') {
-    const reply = await sendWhatsAppMessage(
-      sender,
-      `Which subscription?\n\nTry:\nremove Netflix`
-    )
-
-    return {
-      ok: true,
-      intent: intent.intent,
-      subscriptions: [],
-      replySent: reply.success
-    }
+    return startDeleteMenu(sender)
   }
 
   if (result.status === 'not_found') {
@@ -293,20 +272,10 @@ async function handleSubscriptionDeleteIntent(sender, intent) {
   }
 
   if (result.status === 'multiple') {
-    const options = result.subscriptions
-      .map(formatSubscriptionOption)
-      .join('\n')
-    const reply = await sendWhatsAppMessage(
+    return showDeletePickFromCandidates(
       sender,
-      `Which subscription?\n\n${options}`
+      result.subscriptions.map((item) => ({ type: 'subscription', item, match: 'exact' }))
     )
-
-    return {
-      ok: true,
-      intent: intent.intent,
-      subscriptions: result.subscriptions,
-      replySent: reply.success
-    }
   }
 
   const subscription = await archiveSubscription(result.subscription.id)

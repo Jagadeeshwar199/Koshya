@@ -45,7 +45,7 @@ function unknownReply(text) {
     return `Sounds like a subscription.\n\nTry:\nNetflix renews on 27th every month - 149`
   }
   if (/^(delete|remove|cancel)$/i.test(text)) {
-    return `What should I remove?\n\nTry:\nDelete Netflix\nDelete rent reminder`
+    return `What should I delete?\n\nReply:\nDelete something`
   }
   return `I'm not sure what you mean.\n\nTry:\nShow subscriptions\nRemind me tomorrow at 8 PM\n\nReply help for more.`
 }

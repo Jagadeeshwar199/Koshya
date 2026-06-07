@@ -37,8 +37,6 @@ const {
   handlePendingConfirmationDecline
 } = require('../controllers/queryController')
 const {
-  handleDeleteConfirm,
-  handleDeleteCancel,
   handleListMore
 } = require('../controllers/paginationController')
 const logger = require('../../utils/logger')
@@ -57,6 +55,12 @@ const {
   isExecutablePendingOverrideIntent,
   resolvePendingAction
 } = require('./pendingConfirmationService')
+const {
+  tryStartDeleteFlow,
+  handleDeleteMenuReply,
+  handleDeletePickReply,
+  handlePendingDeleteReply
+} = require('./deleteFlowService')
 async function resolveIntent(ctx, text) {
   if (useLegacyEngine()) {
     return ctx ? intentPipeline.stageDetect(ctx, text) : detectIntent(text)
@@ -230,14 +234,25 @@ async function routeWhatsAppMessageCore(sender, text, options = {}, ctx = null) 
     })
   }
 
-  if (pendingState?.action === 'confirm_delete') {
-    const intent = await resolveIntent(ctx, text)
-    if (intent.intent === INTENTS.CONFIRM) {
-      return intentPipeline.stageExecute(ctx, 'delete_confirm', () => handleDeleteConfirm(sender, pendingState))
-    }
-    if (intent.intent === INTENTS.CANCEL) {
-      return intentPipeline.stageExecute(ctx, 'delete_cancel', () => handleDeleteCancel(sender))
-    }
+  if (pendingState?.action === 'pending_delete') {
+    return intentPipeline.stageExecute(ctx, 'delete_confirm', () =>
+      handlePendingDeleteReply(sender, text, pendingState)
+    )
+  }
+
+  if (pendingState?.action === 'delete_menu') {
+    return intentPipeline.stageExecute(ctx, 'delete_menu', () => handleDeleteMenuReply(sender, text))
+  }
+
+  if (pendingState?.action === 'delete_pick') {
+    return intentPipeline.stageExecute(ctx, 'delete_pick', () =>
+      handleDeletePickReply(sender, text, pendingState)
+    )
+  }
+
+  const deleteStart = await tryStartDeleteFlow(sender, text)
+  if (deleteStart) {
+    return intentPipeline.stageExecute(ctx, 'delete_start', () => deleteStart)
   }
 
   if (pendingState?.action === 'awaiting_reminder_time') {
