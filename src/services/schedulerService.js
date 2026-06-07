@@ -16,6 +16,12 @@ function startScheduler() {
   })
 }
 
+function stopScheduler() {
+  const { stopReminderWorkerGracefully } = require('./reminderWorker')
+  return stopReminderWorkerGracefully()
+}
+
 module.exports = {
-  startScheduler
+  startScheduler,
+  stopScheduler
 }

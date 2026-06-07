@@ -56,8 +56,20 @@ function stopReminderWorker() {
   }
 }
 
+async function stopReminderWorkerGracefully(maxMs = 5000) {
+  stopReminderWorker()
+  const deadline = Date.now() + maxMs
+  while (isRunning && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+  if (isRunning) {
+    logger.warn('reminder.worker_stop_timeout')
+  }
+}
+
 module.exports = {
   runSafely,
   startReminderWorker,
-  stopReminderWorker
+  stopReminderWorker,
+  stopReminderWorkerGracefully
 }

@@ -2,6 +2,27 @@ const crypto = require('crypto')
 const { ApiError } = require('../utils/apiError')
 const logger = require('../../utils/logger')
 
+const signatureStats = {
+  checked: 0,
+  present: 0,
+  missing: 0,
+  valid: 0,
+  invalid: 0
+}
+
+function trackSignature(present, valid) {
+  signatureStats.checked += 1
+  if (present) signatureStats.present += 1
+  else signatureStats.missing += 1
+  if (valid === true) signatureStats.valid += 1
+  if (valid === false) signatureStats.invalid += 1
+  logger.info('webhook.signature_check', {
+    signature_present: present,
+    signature_valid: valid,
+    counts: { ...signatureStats }
+  })
+}
+
 function verifyWebhookGet(req, res) {
   const mode = req.query['hub.mode']
   const token = req.query['hub.verify_token']
@@ -36,6 +57,7 @@ function verifyWebhookSignature(req, res, next) {
     }
 
     logger.warn('webhook.secret_skipped_in_dev')
+    trackSignature(Boolean(req.get('x-hub-signature-256') || req.get('x-gupshup-signature')), null)
     return next()
   }
 
@@ -44,6 +66,7 @@ function verifyWebhookSignature(req, res, next) {
     req.get('x-gupshup-signature')
 
   if (!signature) {
+    trackSignature(false, null)
     const hasInboundMessage = Boolean(
       req.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0] ||
       (req.body?.type === 'message' && req.body?.payload)
@@ -78,14 +101,17 @@ function verifyWebhookSignature(req, res, next) {
     providedBuffer.length !== expectedBuffer.length ||
     !crypto.timingSafeEqual(providedBuffer, expectedBuffer)
   ) {
+    trackSignature(true, false)
     logger.warn('webhook.invalid_signature', { requestId: req.requestId })
     return next(new ApiError(401, 'Invalid webhook signature'))
   }
 
+  trackSignature(true, true)
   return next()
 }
 
 module.exports = {
   verifyWebhookGet,
-  verifyWebhookSignature
+  verifyWebhookSignature,
+  signatureStats
 }

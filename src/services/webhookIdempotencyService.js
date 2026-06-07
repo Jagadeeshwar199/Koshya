@@ -14,7 +14,7 @@ async function isMessageProcessed(messageId) {
 
   if (error) {
     logger.error('webhook.idempotency_check_failed', { messageId, error })
-    return false
+    return true
   }
 
   return Boolean(data)

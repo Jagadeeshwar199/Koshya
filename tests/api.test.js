@@ -117,7 +117,10 @@ async function run() {
     assert.equal(notFound.status, 404)
     assert.equal(notFound.body.error, 'Route not found')
 
-    console.log('API route tests passed: 8')
+    const badPhoneRoute = await request(baseUrl, '/api/subscriptions/abc')
+    assert.equal(badPhoneRoute.status, 404)
+
+    console.log('API route tests passed: 9')
   } finally {
     await new Promise((resolve) => server.close(resolve))
   }

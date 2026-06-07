@@ -29,6 +29,7 @@ const tests = [
   'tests/entity-update-inplace.test.js',
   'test:day13',
   'test:webhook-auth',
+  'tests/security-rollout.test.js',
   'test:ux',
   'test:api'
 ]

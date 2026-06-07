@@ -8,6 +8,13 @@ const {
 
 const router = express.Router()
 
+const webhookJson = express.json({
+  limit: '1mb',
+  verify: (req, res, buf) => {
+    req.rawBody = buf.toString()
+  }
+})
+
 const webhookLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: Number(process.env.WEBHOOK_RATE_LIMIT_PER_MINUTE || 300),
@@ -16,6 +23,6 @@ const webhookLimiter = rateLimit({
 })
 
 router.get('/webhook', verifyWebhookGet)
-router.post('/webhook', webhookLimiter, verifyWebhookSignature, handleWebhook)
+router.post('/webhook', webhookLimiter, webhookJson, verifyWebhookSignature, handleWebhook)
 
 module.exports = router

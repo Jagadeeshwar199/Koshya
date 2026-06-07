@@ -15,7 +15,6 @@ const {
   errorHandler
 } = require('./src/middleware/errorHandler')
 const { checkDatabaseHealth } = require('./src/services/healthService')
-const { stopReminderWorker } = require('./src/services/reminderWorker')
 const { validateProductionConfig } = require('./src/config/production')
 const logger = require('./utils/logger')
 
@@ -37,27 +36,23 @@ app.use(
 )
 
 app.use(requestId)
-app.use(
-  express.json({
-    limit: '1mb',
-    verify: (req, res, buf) => {
-      req.rawBody = buf.toString()
-    }
-  })
-)
+app.use('/', webhookRoutes)
+app.use(express.json({ limit: '1mb' }))
 
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: Number(process.env.API_RATE_LIMIT_PER_MINUTE || 120),
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
+  keyGenerator: (req) =>
+    req.get('x-api-key') ||
+    req.get('authorization')?.replace(/^Bearer\s+/i, '') ||
+    req.ip
 })
 
-app.use('/', webhookRoutes)
-
 const apiRouter = express.Router()
-apiRouter.use(apiLimiter)
 apiRouter.use(apiAuth)
+apiRouter.use(apiLimiter)
 apiRouter.use('/parse', parseRoutes)
 apiRouter.use('/subscriptions', subscriptionRoutes)
 apiRouter.use('/reminders', reminderRoutes)
@@ -111,17 +106,20 @@ function start() {
 function shutdown(signal) {
   logger.info('server.shutdown_started', { signal })
 
-  stopReminderWorker()
+  const { stopScheduler } = require('./src/services/schedulerService')
 
-  if (!serverInstance) {
-    process.exit(0)
-    return
+  const finish = () => {
+    if (!serverInstance) {
+      process.exit(0)
+      return
+    }
+    serverInstance.close(() => {
+      logger.info('server.shutdown_complete', { signal })
+      process.exit(0)
+    })
   }
 
-  serverInstance.close(() => {
-    logger.info('server.shutdown_complete', { signal })
-    process.exit(0)
-  })
+  stopScheduler().then(finish).catch(finish)
 
   setTimeout(() => {
     logger.error('server.shutdown_forced')
