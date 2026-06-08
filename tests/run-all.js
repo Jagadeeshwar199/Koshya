@@ -35,6 +35,7 @@ const tests = [
   'tests/delete-flow.test.js',
   'tests/parse-first.test.js',
   'tests/pending-duplicate.test.js',
+  'tests/core-architecture.test.js',
   'test:ux',
   'test:api'
 ]

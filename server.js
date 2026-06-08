@@ -90,7 +90,7 @@ let serverInstance = null
 function start() {
   validateProductionConfig()
 
-  const { startScheduler } = require('./src/services/schedulerService')
+  const { startScheduler } = require('./src/core/scheduler')
 
   startScheduler()
 
@@ -106,7 +106,7 @@ function start() {
 function shutdown(signal) {
   logger.info('server.shutdown_started', { signal })
 
-  const { stopScheduler } = require('./src/services/schedulerService')
+  const { stopScheduler } = require('./src/core/scheduler')
 
   const finish = () => {
     if (!serverInstance) {
