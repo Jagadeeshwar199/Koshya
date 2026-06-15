@@ -35,8 +35,8 @@ async function logExecution(ctx, { rawMessage, parseResult, result, failureReaso
   if (record.execution_result === 'success') detectionAnalytics.recordExecution()
   else if (record.failure_reason) detectionAnalytics.recordClarification(rawMessage)
 
-  if (ctx?.messageId) {
-    await pipelineLog.logDetection(ctx.messageId, {
+  if (ctx?.requestId) {
+    await pipelineLog.logDetection(ctx, {
       pipeline: 'core',
       raw_message: record.raw_message,
       normalized_message: normalized_event.message,

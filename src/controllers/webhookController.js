@@ -1,3 +1,4 @@
+const crypto = require('crypto')
 const supabase = require('../../config/supabase')
 const { routeWhatsAppMessage } = require('../services/messageRouterService')
 const {
@@ -8,6 +9,7 @@ const { sendWhatsAppMessage } = require('../services/whatsappService')
 const { parseWebhookMessage } = require('../utils/webhookMessage')
 const { WELCOME_TEXT } = require('../controllers/queryController')
 const logger = require('../../utils/logger')
+const { logExecution } = require('../observability/pipelineLogService')
 
 async function isFirstMessage(userPhone) {
   const { count, error } = await supabase
@@ -43,10 +45,22 @@ async function handleWebhook(req, res) {
     const sender = incoming.sender
     const text = incoming.text.replace(/\\+$/, '').trim()
     const messageId = incoming.messageId
+    const requestId = req.requestId || crypto.randomUUID()
 
     if (!text) {
       return res.sendStatus(200)
     }
+
+    await logExecution({
+      requestId,
+      userId: sender,
+      phoneNumber: sender,
+      messageId,
+      stage: 'WEBHOOK_RECEIVED',
+      status: 'INFO',
+      event: 'whatsapp_webhook',
+      input: { text, messageId }
+    })
 
     if (messageId && (await isMessageProcessed(messageId))) {
       return res.sendStatus(200)
@@ -59,8 +73,29 @@ async function handleWebhook(req, res) {
 
     if (messageError) {
       logger.error('webhook.raw_message_save_failed', { userPhone: sender, error: messageError })
+      await logExecution({
+        requestId,
+        userId: sender,
+        phoneNumber: sender,
+        messageId,
+        stage: 'MESSAGE_SAVED',
+        status: 'ERROR',
+        event: 'messages_insert',
+        error: messageError.message
+      })
       return res.sendStatus(500)
     }
+
+    await logExecution({
+      requestId,
+      userId: sender,
+      phoneNumber: sender,
+      messageId,
+      stage: 'MESSAGE_SAVED',
+      status: 'SUCCESS',
+      event: 'messages_insert',
+      output: { text }
+    })
 
     if (await isFirstMessage(sender)) {
       await sendWhatsAppMessage(sender, WELCOME_TEXT)
@@ -68,7 +103,7 @@ async function handleWebhook(req, res) {
 
     let result
     try {
-      result = await routeWhatsAppMessage(sender, text)
+      result = await routeWhatsAppMessage(sender, text, { requestId, whatsappMessageId: messageId })
     } catch (routeErr) {
       logger.error('webhook.route_failed', {
         userPhone: sender,

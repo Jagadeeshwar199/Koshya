@@ -53,11 +53,13 @@ function matchedRule(intent) {
   return hit?.rule || matches[0].rule || null
 }
 
-function createContext(userId, rawMessage) {
+function createContext(userId, rawMessage, meta = {}) {
   return {
     userId,
     rawMessage,
-    messageId: null,
+    requestId: meta.requestId || null,
+    whatsappMessageId: meta.whatsappMessageId || null,
+    messageId: meta.whatsappMessageId || null,
     normalized: null,
     stage: 'init'
   }
@@ -68,19 +70,16 @@ async function stageNormalize(ctx) {
   const t0 = Date.now()
   try {
     ctx.normalized = normalizeText(applyTypoFixes(ctx.rawMessage))
-    ctx.messageId = await pipelineLog.logMessage(ctx.userId, ctx.rawMessage, ctx.normalized)
-    if (!ctx.messageId) {
-      await pipelineLog.logSystemError(
-        'logMessage',
-        new Error('message_logs_insert_failed'),
-        { userId: ctx.userId, rawMessage: ctx.rawMessage }
-      )
-      logger.error('pipeline.message_log_missing', { userId: ctx.userId })
-    }
+    await pipelineLog.logMessage(ctx, ctx.rawMessage, ctx.normalized)
     logger.info('pipeline.normalize', { userId: ctx.userId, messageId: ctx.messageId, ms: Date.now() - t0 })
     return ctx
   } catch (err) {
-    await pipelineLog.logSystemError('normalize', err, { userId: ctx.userId, rawMessage: ctx.rawMessage })
+    await pipelineLog.logSystemError('normalize', err, {
+      requestId: ctx.requestId,
+      userId: ctx.userId,
+      whatsappMessageId: ctx.whatsappMessageId,
+      rawMessage: ctx.rawMessage
+    })
     throw err
   }
 }
@@ -93,7 +92,7 @@ function detectionLogFields(text) {
 }
 
 async function logDetectionRow(ctx, text, payload, ms, pipeline) {
-  await pipelineLog.logDetection(ctx.messageId, {
+  await pipelineLog.logDetection(ctx, {
     pipeline,
     ...detectionLogFields(text),
     ...payload,
@@ -136,7 +135,7 @@ async function stageDetectLegacy(ctx, text) {
   if (!useLegacyEngine()) {
     try {
       const shadow = require('../detection/shadowPipeline').runShadowDetection(text)
-      await pipelineLog.logShadowDetection(ctx.messageId, shadow, Date.now() - t0, 'shadow')
+      await pipelineLog.logShadowDetection(ctx, shadow, Date.now() - t0, 'shadow')
     } catch (e) {
       logger.error('pipeline.shadow_detect_failed', { error: e.message })
     }
@@ -148,7 +147,7 @@ async function stageDetectPrimary(ctx, text) {
   const t0 = Date.now()
   const det = await detectAndPlan(text, ctx)
   const ms = Date.now() - t0
-  await pipelineLog.logShadowDetection(ctx.messageId, det, ms, 'primary')
+  await pipelineLog.logShadowDetection(ctx, det, ms, 'primary')
   await logParserDetection({
     user_id: ctx.userId,
     message_id: ctx.messageId,
@@ -192,7 +191,12 @@ async function stageDetect(ctx, text) {
       0,
       useLegacyEngine() ? 'legacy' : 'primary'
     )
-    await pipelineLog.logSystemError('detect', err, { messageId: ctx.messageId, text })
+    await pipelineLog.logSystemError('detect', err, {
+      requestId: ctx.requestId,
+      userId: ctx.userId,
+      whatsappMessageId: ctx.whatsappMessageId,
+      text
+    })
     throw err
   }
 }
@@ -267,7 +271,11 @@ async function stageAI(ctx, intent, text) {
     logRouting('FINAL_INTENT', { messageId: ctx.messageId, intent: merged.intent, source: 'ai' })
     return merged
   } catch (err) {
-    await pipelineLog.logSystemError('ai_fallback', err, { messageId: ctx.messageId })
+    await pipelineLog.logSystemError('ai_fallback', err, {
+      requestId: ctx.requestId,
+      userId: ctx.userId,
+      whatsappMessageId: ctx.whatsappMessageId
+    })
     return intent
   }
 }
@@ -276,26 +284,26 @@ async function stageValidate(ctx, intent, text) {
   ctx.stage = 'validate'
   try {
     const { passed, error } = validateIntent(intent, text)
-    await pipelineLog.logValidation(ctx.messageId, intent.intent, passed, error)
+    await pipelineLog.logValidation(ctx, intent.intent, passed, error)
     return { passed, error }
   } catch (err) {
-    await pipelineLog.logValidation(ctx.messageId, intent?.intent || 'ERROR', false, err.message)
+    await pipelineLog.logValidation(ctx, intent?.intent || 'ERROR', false, err.message)
     throw err
   }
 }
 
 async function stageExecute(ctx, actionType, fn) {
-  if (!ctx?.messageId) return fn()
+  if (!ctx?.requestId) return fn()
   ctx.stage = 'execute'
   const t0 = Date.now()
   try {
     const result = await fn()
     const ms = Date.now() - t0
     const ok = result?.ok !== false && !result?.error
-    await pipelineLog.logExecution(ctx.messageId, actionType, ok, result?.error || null, ms)
+    await pipelineLog.logExecutionAction(ctx, actionType, ok, result?.error || null, ms)
     return result
   } catch (err) {
-    await pipelineLog.logExecution(ctx.messageId, actionType, false, err.message, Date.now() - t0)
+    await pipelineLog.logExecutionAction(ctx, actionType, false, err.message, Date.now() - t0)
     throw err
   }
 }
@@ -344,8 +352,8 @@ async function processClause(ctx, text, executeFn) {
   return legacyResult
 }
 
-async function runPipeline(userId, rawMessage, routeFn) {
-  const ctx = createContext(userId, rawMessage)
+async function runPipeline(userId, rawMessage, routeFn, meta = {}) {
+  const ctx = createContext(userId, rawMessage, meta)
   const responses = []
   if (setOutboundCapture) setOutboundCapture((t) => responses.push(t))
   let result
@@ -356,9 +364,10 @@ async function runPipeline(userId, rawMessage, routeFn) {
     return result
   } catch (err) {
     await pipelineLog.logSystemError(ctx.stage || 'pipeline', err, {
+      requestId: ctx.requestId,
       userId,
-      rawMessage,
-      messageId: ctx.messageId
+      whatsappMessageId: ctx.whatsappMessageId,
+      rawMessage
     })
     throw err
   } finally {
@@ -366,9 +375,9 @@ async function runPipeline(userId, rawMessage, routeFn) {
       const allOut = [...responses, ...(ctx.capturedResponses || [])]
       const responseSent = allOut.length ? allOut[allOut.length - 1] : null
       const pl = ctx.pendingLearning || ctx.lastDetection?.pendingLearning
-      if (ctx.messageId && pl) {
+      if (ctx.requestId && pl) {
         const { recordDetectionLearning } = require('./aiLearningService')
-        await recordDetectionLearning(ctx.messageId, {
+        await recordDetectionLearning(ctx, {
           message: pl.message || ctx.rawMessage,
           final_intent: pl.final_intent || pl.intent,
           intent: pl.final_intent || pl.intent,
@@ -386,6 +395,30 @@ async function runPipeline(userId, rawMessage, routeFn) {
           ai_intent: pl.ai_intent,
           token_usage: pl.token_usage,
           failure_reason: pl.failure_reason
+        })
+      }
+      if (responseSent && ctx.requestId) {
+        await pipelineLog.logExecution({
+          requestId: ctx.requestId,
+          userId: ctx.userId,
+          phoneNumber: ctx.userId,
+          messageId: ctx.whatsappMessageId,
+          stage: 'RESPONSE_SENT',
+          status: 'SUCCESS',
+          event: 'whatsapp_reply',
+          output: { response: responseSent }
+        })
+      }
+      if (ctx.requestId) {
+        await pipelineLog.logExecution({
+          requestId: ctx.requestId,
+          userId: ctx.userId,
+          phoneNumber: ctx.userId,
+          messageId: ctx.whatsappMessageId,
+          stage: 'FINISHED',
+          status: result?.ok === false ? 'WARNING' : 'SUCCESS',
+          event: 'pipeline_complete',
+          output: { intent: result?.intent, ok: result?.ok, replySent: result?.replySent }
         })
       }
       await require('./parserTelemetryService').updateParserEventOutcome(ctx, result, allOut)

@@ -101,6 +101,7 @@ require.cache[require.resolve('../src/observability/pipelineLogService')] = {
     logMessage: async () => null,
     logDetection: async () => {},
     logValidation: async () => {},
+    logExecutionAction: async () => {},
     logExecution: async () => {},
     logShadowDetection: async () => {},
     logSystemError: async () => {}

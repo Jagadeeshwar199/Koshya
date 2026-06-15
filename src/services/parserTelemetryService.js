@@ -246,42 +246,34 @@ function formatLines(title, rows, formatter) {
 }
 
 async function adminStatsReply() {
-  const messages = await queryRows(() => supabase.from('message_logs').select('id'))
-  const execs = await queryRows(() => supabase.from('execution_logs').select('success'))
-  const detectFails = await queryRows(() =>
-    supabase.from('detection_logs').select('failure_reason').eq('success', false)
-  )
-  const total = messages.length
-  const failed = execs.filter((e) => !e.success).length
+  const logs = await queryRows(() => supabase.from('execution_logs').select('*').limit(10000))
+  const requests = new Set(logs.map((l) => l.request_id).filter(Boolean))
+  const total = requests.size
+  const failed = logs.filter((l) => l.status === 'ERROR' || l.stage === 'FAILED').length
   const failCounts = {}
-  for (const row of detectFails) {
-    const key = row.failure_reason || 'detect_fail'
+  for (const row of logs.filter((l) => l.stage === 'INTENT_DETECTION' && l.status === 'WARNING')) {
+    const key = row.error_message || row.output_data?.failure_reason || 'detect_fail'
     failCounts[key] = (failCounts[key] || 0) + 1
   }
-  const failExec = await queryRows(() =>
-    supabase.from('execution_logs').select('message_id').eq('success', false).limit(500)
-  )
-  const failIds = [...new Set(failExec.map((r) => r.message_id))]
-  const failedMsgs =
-    failIds.length > 0
-      ? await queryRows(() => supabase.from('message_logs').select('raw_message').in('id', failIds))
-      : []
   const msgCounts = {}
-  for (const row of failedMsgs) msgCounts[row.raw_message] = (msgCounts[row.raw_message] || 0) + 1
-  const unknowns = await queryRows(() =>
-    supabase.from('detection_logs').select('extracted_entities').eq('detected_intent', 'UNKNOWN').limit(500)
-  )
+  for (const row of logs.filter((l) => l.status === 'ERROR' || l.stage === 'FAILED')) {
+    const key = row.input_data?.raw_message || row.input_data?.text || row.phone_number || '?'
+    msgCounts[key] = (msgCounts[key] || 0) + 1
+  }
+  const unknowns = logs.filter((l) => l.stage === 'INTENT_DETECTION' && (l.event === 'UNKNOWN' || l.output_data?.intent === 'UNKNOWN'))
   const svcCounts = {}
   for (const row of unknowns) {
-    const s = row.extracted_entities?.service || row.extracted_entities?.serviceName
+    const ents = row.output_data?.entities || {}
+    const s = ents.service || ents.serviceName
     if (s) svcCounts[s] = (svcCounts[s] || 0) + 1
   }
-  const rate = total ? Math.round(((total - failed) / total) * 100) : 0
+  const finished = logs.filter((l) => l.stage === 'FINISHED' && l.status !== 'ERROR').length
+  const rate = total ? Math.round((finished / total) * 100) : 0
   return [
     '📊 Pipeline Stats',
-    `Messages: ${total}`,
-    `Exec success: ${rate}%`,
-    `Exec failure: ${total ? 100 - rate : 0}%`,
+    `Requests: ${total}`,
+    `Finished: ${rate}%`,
+    `Errors: ${failed}`,
     '',
     formatLines('Top Failures', Object.entries(failCounts).sort((a, b) => b[1] - a[1]).slice(0, 5), ([k, v]) => `• ${k}: ${v}`),
     '',
@@ -295,8 +287,8 @@ async function adminFailuresReply() {
   const rows = await queryRows(() =>
     supabase
       .from('execution_logs')
-      .select('created_at, error_message, action_type, message_logs(raw_message)')
-      .eq('success', false)
+      .select('created_at, error_message, event, stage, input_data, status')
+      .or('status.eq.ERROR,stage.eq.FAILED')
       .order('created_at', { ascending: false })
       .limit(50)
   )
@@ -304,14 +296,19 @@ async function adminFailuresReply() {
     '🚨 Last 50 Failures',
     rows,
     (r) =>
-      `• ${(r.message_logs?.raw_message || '').slice(0, 60)}\n  ${r.error_message || r.action_type || 'unknown'}`
+      `• ${(r.input_data?.raw_message || r.input_data?.text || '').slice(0, 60)}\n  ${r.error_message || r.event || r.stage || 'unknown'}`
   )
 }
 
 async function adminRoutesReply() {
-  const rows = await queryRows(() => supabase.from('execution_logs').select('action_type').limit(5000))
+  const rows = await queryRows(() =>
+    supabase.from('execution_logs').select('event, stage').in('stage', ['ACTION_SELECTION', 'REMINDER_CREATED', 'SUBSCRIPTION_CREATED', 'SUBSCRIPTION_UPDATED', 'DATABASE_WRITE']).limit(5000)
+  )
   const counts = {}
-  for (const row of rows) counts[row.action_type || 'null'] = (counts[row.action_type || 'null'] || 0) + 1
+  for (const row of rows) {
+    const key = row.event || row.stage || 'null'
+    counts[key] = (counts[key] || 0) + 1
+  }
   return formatLines(
     '🛣 Action Distribution',
     Object.entries(counts).sort((a, b) => b[1] - a[1]),
@@ -320,16 +317,12 @@ async function adminRoutesReply() {
 }
 
 async function adminLowConfidenceReply() {
-  const rows = await queryRows(() =>
-    supabase
-      .from('detection_logs')
-      .select('confidence, message_logs(normalized_message)')
-      .lt('confidence', MIN_CONFIDENCE)
-      .limit(5000)
-  )
+  const rows = await queryRows(() => supabase.from('execution_logs').select('output_data, input_data').eq('stage', 'INTENT_DETECTION').limit(5000))
   const counts = {}
   for (const row of rows) {
-    const key = row.message_logs?.normalized_message || '?'
+    const conf = Number(row.output_data?.confidence || 0)
+    if (conf >= MIN_CONFIDENCE) continue
+    const key = row.input_data?.normalized_message || row.input_data?.raw_message || '?'
     counts[key] = (counts[key] || 0) + 1
   }
   return formatLines(
