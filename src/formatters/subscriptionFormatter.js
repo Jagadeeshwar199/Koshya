@@ -108,6 +108,7 @@ module.exports = {
   formatSubscriptionUpdated,
   formatSubscriptionRemoved,
   formatSubscriptionOption,
+  formatScheduleShort,
   scheduleLine,
   nextLine
 }

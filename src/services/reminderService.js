@@ -537,12 +537,14 @@ function normalizeReminderMessage(message) {
     .replace(/[^a-z0-9]/g, '')
 }
 
+const { sanitizeTaskText } = require('../utils/inputValidation')
+
 async function createReminderFromIntent({ userPhone, message, entities = {}, parseMeta = {} }) {
   if (!userPhone) {
     throw new ApiError(400, 'userPhone is required')
   }
 
-  const subject = parseMeta.taskText || extractReminderTitle(message, entities.serviceName)
+  const subject = sanitizeTaskText(parseMeta.taskText || extractReminderTitle(message, entities.serviceName))
   const daily = /\b(?:daily|every\s+day)\b/i.test(message)
   const packedMessage = packReminderMessage(subject, { daily })
   const triggerAt = resolveTriggerAt(entities.date)
@@ -895,6 +897,7 @@ module.exports = {
   mapReminderRow,
   extractReminderTitle,
   normalizeReminderTitle,
+  normalizeReminderMessage,
   stripReminderSchedulingWords,
   packReminderMessage,
   unpackReminderMessage,

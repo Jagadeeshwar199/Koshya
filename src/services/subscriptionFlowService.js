@@ -16,6 +16,7 @@ const { setLastEntity } = require('./entityContextService')
 const logger = require('../../utils/logger')
 
 const { detectIntent, INTENTS } = require('./intentService')
+const { isValidAmount, MAX_SUBSCRIPTION_AMOUNT } = require('../utils/inputValidation')
 
 function isBlockedSubscriptionIntent(intent, text = '') {
   const i = intent?.intent
@@ -57,6 +58,13 @@ async function saveAndReply(sender, parsed, text = '') {
   try {
     const { parseFirst } = require('./parseFirstService')
     const pf = parseFirst(text || parsed.serviceName)
+    if (parsed.amount != null && !isValidAmount(parsed.amount)) {
+      await sendWhatsAppMessage(
+        sender,
+        `That amount looks too large. Try a value up to ₹${MAX_SUBSCRIPTION_AMOUNT.toLocaleString('en-IN')}.`
+      )
+      return { ok: false, blocked: true }
+    }
     const subscription = await createSubscriptionRecord({
       userPhone: sender,
       serviceName: parsed.serviceName,

@@ -36,6 +36,8 @@ const tests = [
   'tests/parse-first.test.js',
   'tests/pending-duplicate.test.js',
   'tests/core-architecture.test.js',
+  'tests/regression-suite.test.js',
+  'tests/input-validation.test.js',
   'test:ux',
   'test:api'
 ]

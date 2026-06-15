@@ -92,6 +92,8 @@ function extractRecurrence(text) {
   return null
 }
 
+const { isValidMeridiemHour } = require('../utils/inputValidation')
+
 function extractTime(text) {
   const meridiemMatch = text.match(/\b(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i)
 
@@ -99,6 +101,7 @@ function extractTime(text) {
     let hour = Number(meridiemMatch[1])
     const minute = Number(meridiemMatch[2] || 0)
     const meridiem = meridiemMatch[3].toLowerCase()
+    if (!isValidMeridiemHour(hour) || minute > 59) return null
 
     if (meridiem === 'pm' && hour < 12) {
       hour += 12
@@ -114,6 +117,7 @@ function extractTime(text) {
   if (bareMeridiem) {
     let hour = Number(bareMeridiem[1])
     const meridiem = bareMeridiem[2].toLowerCase()
+    if (!isValidMeridiemHour(hour)) return null
     if (meridiem === 'pm' && hour < 12) {
       hour += 12
     }
@@ -367,6 +371,9 @@ function extractDate(text) {
 
 function extractServiceName(text) {
   if (/^(?:delete|remove|cancel)$/i.test(text.trim())) {
+    return null
+  }
+  if (/\bcancel\s+all\s+reminders?\b/i.test(text)) {
     return null
   }
 

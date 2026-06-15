@@ -99,24 +99,45 @@ function scoreSignals(text, lower, entities, threshold) {
     [INTENTS.UNKNOWN]: 0.35
   }
 
-  if (/^(help|start|hi|hello|hi help|what can you do\??|commands|\?)$/i.test(text)) {
+  if (/^(help|start|hi|hello|hey|menu|hi help|what can you do\??|how does this work|commands|\?)$/i.test(text)) {
     scores[INTENTS.HELP] = 0.99
+  }
+  if (/^good\s+morning$/i.test(text)) {
+    scores[INTENTS.HELP] = 0.99
+    scores[INTENTS.REMINDER_RESCHEDULE] = 0.2
   }
   if (/^(more|show more|next)$/i.test(text)) {
     scores[INTENTS.LIST_MORE] = 0.99
   }
-  if (/^(yes|confirm|ok|okay|k)$/i.test(text)) {
+  if (/^(yes|y|sure|yeah|alright|confirm|ok|okay|k)$/i.test(text)) {
     scores[INTENTS.CONFIRM] = 0.99
   }
-  if (/^(no|cancel|stop)$/i.test(text)) {
+  if (/^(no|nope|cancel|stop|abort|nevermind|not now|no thanks)$/i.test(text) || /^don'?t$/i.test(text)) {
     scores[INTENTS.CANCEL] = 0.99
   }
 
   if (
     (/\b(?:cancel|delete|remove)\b/.test(lower) && /\b(?:reminder|reminders)\b/.test(lower)) ||
-    /\bstop reminding me\b/.test(lower)
+    /\bstop reminding me\b/.test(lower) ||
+    /\bstop\s+my\s+\w+\s+reminder\b/i.test(lower) ||
+    /\bdon'?t\s+remind\s+me\b/i.test(lower) ||
+    /\bcancel\s+all\s+reminders?\b/i.test(lower)
   ) {
     scores[INTENTS.REMINDER_CANCEL] = clamp(0.88 + deleteSemantic * 0.1)
+  }
+  if (/\bdon'?t\s+remind\s+me\b/i.test(lower)) {
+    scores[INTENTS.REMINDER_CANCEL] = Math.max(scores[INTENTS.REMINDER_CANCEL], 0.96)
+    scores[INTENTS.REMINDER_CREATE] = 0.28
+  }
+  if (/\bcancel\s+all\s+reminders?\b/i.test(lower)) {
+    scores[INTENTS.REMINDER_CANCEL] = Math.max(scores[INTENTS.REMINDER_CANCEL], 0.96)
+    scores[INTENTS.UNKNOWN] = 0.2
+  }
+  if (/\bunsubscribe\b/i.test(lower) && entities.serviceName) {
+    scores[INTENTS.SUBSCRIPTION_DELETE] = 0.96
+  }
+  if (/\bstop\s+\w+\s+tracking\b/i.test(lower)) {
+    scores[INTENTS.SUBSCRIPTION_DELETE] = 0.94
   }
   if (
     deleteSemantic > 0.4 &&
@@ -881,6 +902,9 @@ function resolveQueryType(text, lower, intent) {
 }
 
 function isExplicitQuery(lower) {
+  if (/^(?:show\s+more|more|next)$/i.test(lower.trim())) {
+    return false
+  }
   return (
     /\b(?:show|list|display|what|which|view|tell\s+me|how\s+many)\b/i.test(lower) ||
     (/\breminders?\b/i.test(lower) &&
@@ -889,7 +913,7 @@ function isExplicitQuery(lower) {
       !/\b(?:change|move|update|reschedule)\b/i.test(lower)) ||
     (/\breminder\b/i.test(lower) &&
       /\b(?:show|list|what|which|my|existing)\b/i.test(lower) &&
-      !/\b(?:change|update|delete|remove|cancel|reschedule)\b/i.test(lower)) ||
+      !/\b(?:change|update|delete|remove|cancel|reschedule|move|stop)\b/i.test(lower)) ||
     (/\bsubscriptions?\b/i.test(lower) && /\b(?:today|tomorrow|tomorrows)\b/i.test(lower)) ||
     (/\b(?:renewal|renews?)\b/i.test(lower) &&
       /\b(?:today|tomorrow)\b/i.test(lower) &&
@@ -934,6 +958,9 @@ function pickBestIntent(scores, lower = '') {
 }
 
 function isShortAmbiguous(text, lower, entities) {
+  if (/\bcancel\s+all\s+reminders?\b/i.test(lower)) {
+    return false
+  }
   if (
     (/\b(?:reminders?|subscriptions?|notify|notifiy|ping|alarm|wake)\b/i.test(lower) &&
       /\b(?:today|tomorrow|tomorrows|tonight)\b/i.test(lower)) ||
@@ -1022,6 +1049,11 @@ function detectIntent(message) {
   }
 
   const entities = extractEntities(text)
+  if (/\bcancel\s+all\s+reminders?\b/i.test(lower)) {
+    return buildResult(INTENTS.REMINDER_CANCEL, 0.96, text, entities, {
+      match_details: buildMatchDetails(INTENTS.REMINDER_CANCEL, { [INTENTS.REMINDER_CANCEL]: 0.96 }, lower, entities)
+    })
+  }
   const threshold = DEFAULT_FUZZY_THRESHOLD
   const scores = scoreSignals(text, lower, entities, threshold)
   if (isShortAmbiguous(text, lower, entities)) {
