@@ -50,7 +50,7 @@ function extractScheduleText(text, entities, parsed) {
     const time = clock ? formatTime(clock) : ''
     return time ? `Every ${day} · ${time}` : `Every ${day}`
   }
-  if (/\bdaily\b|\bevery\s+day\b/i.test(lower)) {
+  if (/\b(?:daily|every\s+day|everyday)\b/i.test(lower)) {
     const clock = entities.date?.time || parseClock(text)
     return clock ? `Every day · ${formatTime(clock)}` : 'Every day'
   }
@@ -74,16 +74,22 @@ function extractScheduleText(text, entities, parsed) {
 function stripSchedule(text) {
   return String(text || '')
     .replace(/\bremind\s+(?:me\s+)?(?:to\s+)?/gi, '')
-    .replace(/\b(?:renews?\s+on|every\s+month|monthly|yearly)\b[^.]*$/gi, '')
+    .replace(/\b(?:after|in)\s+\d+\s*(?:minutes?|mins?|hours?|hrs?|days?)\s+to\s+/gi, '')
+    .replace(/\b(?:tomorrow|today|tonight)\s+to\s+/gi, '')
+    .replace(/\b(?:daily|every\s+day|everyday)\s+to\s+/gi, '')
+    .replace(/\b(?:renews?\s+(?:on|at)|every\s+month|monthly|yearly)\b[^.]*$/gi, '')
     .replace(/\bevery\s+(?:day|month|year|\d+\s+months?|[a-z]+day)\b(?:\s+(?:at\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm)?)?/gi, '')
     .replace(/\b(?:tomorrow|today|tonight|at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\b/gi, '')
+    .replace(/\b(?:after|in)\s+\d+\s*(?:minutes?|mins?|hours?|hrs?|days?)\b/gi, '')
     .replace(/\s+/g, ' ')
     .trim()
 }
 
 function extractTaskText(text, entities, parsed, itemType) {
   if (itemType === 'SUBSCRIPTION') {
-    return parsed?.draft?.serviceName || entities.serviceName || 'Subscription'
+    if (parsed?.success && parsed?.serviceName) return parsed.serviceName
+    if (parsed?.draft?.serviceName) return titleCase(parsed.draft.serviceName)
+    return 'Subscription'
   }
   if (entities.actionText) return titleCase(entities.actionText)
   const stripped = stripSchedule(text)

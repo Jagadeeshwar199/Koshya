@@ -22,6 +22,7 @@ function applyTypoFixes(text) {
     .replace(/\brmndr\b/gi, 'remind')
     .replace(/\bsh0w\b/gi, 'show')
     .replace(/\btommorow\b|\btommorrow\b/gi, 'tomorrow')
+    .replace(/\beveryday\b/gi, 'every day')
     .replace(/\bexpries\b|\bexprie\b/gi, 'expires')
     .replace(/\bnetflx\b/gi, 'netflix')
     .replace(/\bspoitfy\b/gi, 'spotify')

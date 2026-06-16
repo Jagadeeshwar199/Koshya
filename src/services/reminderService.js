@@ -441,7 +441,7 @@ function unpackReminderMessage(message) {
 function stripReminderSchedulingWords(text) {
   return String(text || '')
     .replace(/\b(?:remind me|create a reminder|set a reminder|add a reminder)\b/gi, ' ')
-    .replace(/\b(?:daily|every\s+day)\b/gi, ' ')
+    .replace(/\b(?:daily|every\s+day|everyday)\b/gi, ' ')
     .replace(/\b(?:tomorrow|today|tonight|next week|next month)\b/gi, ' ')
     .replace(/\bin\s+the\s+(?:morning|afternoon|evening|night)\b/gi, ' ')
     .replace(/\b(?:about|for|on|in)\b/gi, ' ')
@@ -467,8 +467,12 @@ function extractReminderTitle(message, serviceName) {
   if (/^(?:in|after)\s+\d+\s*(?:minutes?|mins?|hours?|hrs?|days?)\s+remind\s+me\b/i.test(message)) {
     return 'Reminder'
   }
-  if (/\bremind\s+me\s+(?:in|after)\s+\d+\s*(?:minutes?|mins?|hours?|hrs?|days?)\b/i.test(message)) {
-    return 'Reminder'
+
+  const offsetTo = String(message || '').match(
+    /\bremind\s+me\s+(?:after|in)\s+\d+\s*(?:minutes?|mins?|hours?|hrs?|days?)\s+to\s+(.+)$/i
+  )
+  if (offsetTo?.[1]) {
+    return normalizeReminderTitle(stripReminderSchedulingWords(offsetTo[1]))
   }
 
   if (
@@ -477,6 +481,13 @@ function extractReminderTitle(message, serviceName) {
     !/\bremind\s+me\s+(?:to|about)\b/i.test(message)
   ) {
     return normalizeReminderTitle(serviceName)
+  }
+
+  const tomorrowTo = String(message || '').match(
+    /\bremind\s+me\s+(?:tomorrow|today|tonight)\s+to\s+(.+)$/i
+  )
+  if (tomorrowTo?.[1]) {
+    return normalizeReminderTitle(stripReminderSchedulingWords(tomorrowTo[1]))
   }
 
   const offsetLead = String(message || '').match(
@@ -489,7 +500,7 @@ function extractReminderTitle(message, serviceName) {
     }
   }
 
-  const everyDayLead = String(message || '').match(/^\s*every\s+day\s+(.+)/i)
+  const everyDayLead = String(message || '').match(/^\s*(?:every\s+day|everyday)\s+(.+)/i)
   if (everyDayLead?.[1]) {
     const title = stripReminderSchedulingWords(everyDayLead[1])
     if (title) {
@@ -498,7 +509,7 @@ function extractReminderTitle(message, serviceName) {
   }
 
   const dailyMatch = String(message || '').match(
-    /\bremind\s+me\s+(?:daily|every\s+day)\s+to\s+(.+)/i
+    /\bremind\s+me\s+(?:daily|every\s+day|everyday)\s+to\s+(.+)/i
   )
   if (dailyMatch?.[1]) {
     const title = stripReminderSchedulingWords(dailyMatch[1])
@@ -545,7 +556,8 @@ async function createReminderFromIntent({ userPhone, message, entities = {}, par
   }
 
   const subject = sanitizeTaskText(parseMeta.taskText || extractReminderTitle(message, entities.serviceName))
-  const daily = /\b(?:daily|every\s+day)\b/i.test(message)
+  const { applyTypoFixes } = require('../utils/textUtils')
+  const daily = /\b(?:daily|every\s+day|everyday)\b/i.test(applyTypoFixes(message))
   const packedMessage = packReminderMessage(subject, { daily })
   const triggerAt = resolveTriggerAt(entities.date)
   const { parseMetaRow } = require('./parseFirstService')

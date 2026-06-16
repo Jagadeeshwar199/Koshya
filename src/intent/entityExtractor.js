@@ -74,7 +74,7 @@ function extractRecurrence(text) {
   if (/\bevery\s+(\d+)\s+months?\b/.test(lower)) {
     return lower.match(/\bevery\s+(\d+)\s+months?\b/)[0]
   }
-  if (/\b(?:daily|every\s+day)\b/.test(lower)) {
+  if (/\b(?:daily|every\s+day|everyday)\b/.test(lower)) {
     return 'daily'
   }
   if (/\bevery\s+weekday\b/.test(lower)) {
@@ -370,6 +370,9 @@ function extractDate(text) {
 }
 
 function extractServiceName(text) {
+  if (/^delete\s+all\s+(?:reinders?|remiders?|remidners?|reminders?)\s*$/i.test(String(text || '').trim())) {
+    return null
+  }
   if (/^(?:delete|remove|cancel)$/i.test(text.trim())) {
     return null
   }
@@ -444,6 +447,9 @@ const BLOCKED_SERVICE_NAMES = new Set([
 
 function extractActionText(text) {
   const patterns = [
+    /\bremind\s+me\s+(?:after|in)\s+\d+\s*(?:minutes?|mins?|hours?|hrs?|days?)\s+to\s+(.+)$/i,
+    /\bremind\s+me\s+(?:tomorrow|today|tonight)\s+to\s+(.+)$/i,
+    /\bremind\s+me\s+(?:daily|every\s+day|everyday)\s+to\s+(.+)$/i,
     /\b(?:need to|must|should|have to)\s+(.+?)(?:\s+(?:tomorrow|today|tonight|on|at|in|after|next|friday|monday|tuesday|wednesday|thursday|saturday|sunday)\b|$)/i,
     /\b(?:remind\s+me\s+(?:to|about))\s+(.+?)(?:\s+(?:tomorrow|today|at|on|in|after|every)\b|$)/i,
     /\b([a-z].+?)\s+(?:tomorrow|today|tonight)\b/i,
@@ -452,15 +458,19 @@ function extractActionText(text) {
     /\b(?:appointment|meeting)\s+(?:for\s+)?(.+?)(?:\s+on\b|$)/i
   ]
 
-  for (const pattern of patterns) {
+  for (let i = 0; i < patterns.length; i++) {
+    const pattern = patterns[i]
     const match = text.match(pattern)
     const captured = match?.[2] || match?.[1]
     if (captured) {
-      const action = cleanEntity(
-        pattern.source.includes('appointment') && match[1] && !match[2]
-          ? `${match[1] || ''} appointment`.trim()
-          : captured
-      )
+      const raw = String(captured).trim()
+      const action = i < 3
+        ? raw
+        : cleanEntity(
+            pattern.source.includes('appointment') && match[1] && !match[2]
+              ? `${match[1] || ''} appointment`.trim()
+              : captured
+          )
       if (action && action.length > 2) {
         return action
       }

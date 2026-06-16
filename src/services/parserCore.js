@@ -60,6 +60,57 @@ function tryPatterns(text) {
   const patterns = [
     {
       regex: new RegExp(
+        `^(.+?) renews at (\\d{1,2})(?:st|nd|rd|th)?\\s+(${MONTH_PATTERN})\\s+every\\s+month(?:\\s*-?\\s*${AMOUNT})?\\s*$`,
+        'i'
+      ),
+      map: (m) => ({
+        serviceName: m[1],
+        renewalDay: Number(m[2]),
+        recurrence: 'monthly',
+        amount: m[4] ? Number(m[4]) : null
+      })
+    },
+    {
+      regex: new RegExp(
+        `^(\\d{1,2})(?:st|nd|rd|th)?\\s+(${MONTH_PATTERN})\\s+every\\s+month\\s+(.+?)\\s*$`,
+        'i'
+      ),
+      map: (m) => ({
+        serviceName: m[3],
+        renewalDay: Number(m[1]),
+        renewalMonth: m[2],
+        recurrence: 'monthly',
+        amount: null
+      })
+    },
+    {
+      regex: new RegExp(
+        `^(${MONTH_PATTERN})\\s+(\\d{1,2})\\s+every\\s+month\\s+(.+?)\\s*$`,
+        'i'
+      ),
+      map: (m) => ({
+        serviceName: m[3],
+        renewalDay: Number(m[2]),
+        renewalMonth: m[1],
+        recurrence: 'monthly',
+        amount: null
+      })
+    },
+    {
+      regex: new RegExp(
+        `^(\\d{1,2})\\s+(${MONTH_PATTERN})\\s+every\\s+month\\s+(.+?)\\s*$`,
+        'i'
+      ),
+      map: (m) => ({
+        serviceName: m[3],
+        renewalDay: Number(m[1]),
+        renewalMonth: m[2],
+        recurrence: 'monthly',
+        amount: null
+      })
+    },
+    {
+      regex: new RegExp(
         `^(.+?) renews on (\\d{1,2})(?:st|nd|rd|th)?\\s+(${MONTH_PATTERN})\\s+(monthly|yearly)(?:\\s*-?\\s*${AMOUNT})?\\s*$`,
         'i'
       ),
@@ -430,6 +481,12 @@ function extractRenewal(text) {
   let renewalDay = null
   let renewalMonth = null
 
+  const renewsAtDayMonth = text.match(
+    new RegExp(`renews?\\s+at\\s+(\\d{1,2})(?:st|nd|rd|th)?\\s+(${MONTH_PATTERN})`, 'i')
+  )
+  const renewsAtMonthDay = text.match(
+    new RegExp(`renews?\\s+at\\s+(${MONTH_PATTERN})\\s+(\\d{1,2})`, 'i')
+  )
   const renewsMonthDay = text.match(
     new RegExp(`renews?\\s+on\\s+(${MONTH_PATTERN})\\s+(\\d{1,2})`, 'i')
   )
@@ -450,7 +507,13 @@ function extractRenewal(text) {
   const dayOnly = text.match(/^(\d{1,2})(?:st|nd|rd|th)?$/i)
   const everyMonth = text.match(/(\d{1,2})(?:st|nd|rd|th)?\s+every\s+month/i)
 
-  if (renewsMonthDay) {
+  if (renewsAtDayMonth) {
+    renewalDay = Number(renewsAtDayMonth[1])
+    renewalMonth = renewsAtDayMonth[2]
+  } else if (renewsAtMonthDay) {
+    renewalMonth = renewsAtMonthDay[1]
+    renewalDay = Number(renewsAtMonthDay[2])
+  } else if (renewsMonthDay) {
     renewalMonth = renewsMonthDay[1]
     renewalDay = Number(renewsMonthDay[2])
   } else if (renewsDayMonth) {

@@ -36,9 +36,12 @@ Are you sure?
 (yes/no)`
 }
 
+const DELETE_ALL_REMINDERS =
+  /^delete\s+all\s+(?:reinders?|remiders?|remidners?|reminders?)\s*$/i
+
 function parseDeleteAll(text) {
   const t = String(text || '').trim().toLowerCase()
-  if (/^delete\s+all\s+reminders?$/.test(t)) return 'all_reminders'
+  if (DELETE_ALL_REMINDERS.test(t)) return 'all_reminders'
   if (/^delete\s+all\s+subscriptions?$/.test(t)) return 'all_subscriptions'
   if (/^delete\s+(?:everything|all)$/.test(t)) return 'everything'
   return null
@@ -259,5 +262,6 @@ module.exports = {
   showDeletePickFromCandidates,
   startDeleteMenu,
   parseDeleteAll,
-  isAmbiguousDelete
+  isAmbiguousDelete,
+  DELETE_ALL_REMINDERS
 }

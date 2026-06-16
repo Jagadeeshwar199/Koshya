@@ -90,6 +90,12 @@ async function run() {
 
   state = null
   sent.length = 0
+  await tryStartDeleteFlow('919999999999', 'Delete all reinders')
+  assert.equal(state.action, 'pending_delete')
+  assert.equal(state.delete_scope, 'all_reminders')
+
+  state = null
+  sent.length = 0
   await tryStartDeleteFlow('919999999999', 'Delete all reminders')
   assert.equal(state.action, 'pending_delete')
   assert.equal(state.delete_scope, 'all_reminders')

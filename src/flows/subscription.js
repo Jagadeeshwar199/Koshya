@@ -14,7 +14,7 @@ function isBlockedSubscriptionIntent(intent, text = '') {
   const i = intent?.intent
   const t = String(text || intent?.rawText || '').trim().toLowerCase()
   if (/^(show|list)\s+(?:my\s+)?(?:all\s+)?subscriptions?\b/.test(t)) return true
-  if (/^delete\s+all\s+reminders?\b/.test(t)) return true
+  if (/^delete\s+all\s+(?:reinders?|remiders?|remidners?|reminders?)\b/.test(t)) return true
   if (/^(hi|hello|start|help)\b/.test(t)) return true
   if (!i || i === INTENTS.UNKNOWN) return /^(delete|remove|cancel|show|list|help)\b/.test(t)
   if (i === INTENTS.HELP || i === INTENTS.CANCEL || i === INTENTS.LIST_MORE) return true
