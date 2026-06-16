@@ -78,12 +78,13 @@ async function processQueuedReminders() {
           throw new Error(`WhatsApp send failed: ${JSON.stringify(sendResult.error)}`)
         }
 
+        const deliveredAt = new Date()
+        const { buildDeliveryUpdate } = require('./recurrenceScheduleService')
+        const deliveryPatch = buildDeliveryUpdate(claimed, deliveredAt)
+
         const { error: sentError } = await supabase
           .from('reminders')
-          .update({
-            status: 'sent',
-            sent_at: new Date().toISOString()
-          })
+          .update(deliveryPatch)
           .eq('id', claimed.id)
           .eq('status', 'processing')
 
@@ -94,7 +95,9 @@ async function processQueuedReminders() {
         sent++
         logger.info('reminder.delivery_sent', {
           reminderId: claimed.id,
-          userPhone: claimed.user_phone
+          userPhone: claimed.user_phone,
+          nextStatus: deliveryPatch.status,
+          nextTriggerAt: deliveryPatch.trigger_at || null
         })
       } catch (err) {
         logger.error('reminder.delivery_failed', {

@@ -68,6 +68,13 @@ function formatReminderTime(triggerAt, now = new Date()) {
 }
 
 function formatReminderScheduleLine(reminder, now = new Date()) {
+  const { parseRecurrenceSchedule, formatRecurrenceDisplay } = require('../services/recurrenceScheduleService')
+  const recurrence = parseRecurrenceSchedule(reminder.scheduleText || reminder.schedule_text, reminder.message)
+  if (recurrence) {
+    const label = formatRecurrenceDisplay(recurrence)
+    if (label) return label
+  }
+
   const { daily } = unpackReminderMessage(reminder.message)
   const formatted = formatReminderTime(reminder.triggerAt, now)
 

@@ -556,11 +556,15 @@ async function createReminderFromIntent({ userPhone, message, entities = {}, par
   }
 
   const subject = sanitizeTaskText(parseMeta.taskText || extractReminderTitle(message, entities.serviceName))
-  const { applyTypoFixes } = require('../utils/textUtils')
-  const daily = /\b(?:daily|every\s+day|everyday)\b/i.test(applyTypoFixes(message))
-  const packedMessage = packReminderMessage(subject, { daily })
   const triggerAt = resolveTriggerAt(entities.date)
+  const { inferRecurrenceSchedule, serializeRecurrenceSchedule } = require('./recurrenceScheduleService')
+  const recurrence = inferRecurrenceSchedule(message, entities, triggerAt)
+  const packedMessage = packReminderMessage(subject, { daily: false })
   const { parseMetaRow } = require('./parseFirstService')
+  const metaRow = parseMetaRow(parseMeta)
+  if (recurrence) {
+    metaRow.schedule_text = serializeRecurrenceSchedule(recurrence)
+  }
 
   logger.info('reminder.schedule', {
     userPhone,
@@ -577,7 +581,7 @@ async function createReminderFromIntent({ userPhone, message, entities = {}, par
       status: 'pending',
       trigger_at: triggerAt.toISOString(),
       retry_count: 0,
-      ...parseMetaRow(parseMeta)
+      ...metaRow
     })
     .select('*')
     .maybeSingle()
