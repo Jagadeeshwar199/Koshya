@@ -91,14 +91,22 @@ function start() {
   validateProductionConfig()
 
   const { startScheduler } = require('./src/core/scheduler')
+  const { checkRequiredSchema } = require('./src/services/schemaCheckService')
 
-  startScheduler()
+  checkRequiredSchema()
+    .then(() => {
+      startScheduler()
 
-  const PORT = process.env.PORT || 3000
+      const PORT = process.env.PORT || 3000
 
-  serverInstance = app.listen(PORT, () => {
-    logger.info('server.started', { port: PORT })
-  })
+      serverInstance = app.listen(PORT, () => {
+        logger.info('server.started', { port: PORT })
+      })
+    })
+    .catch((err) => {
+      logger.error('server.schema_check_failed', { error: err.message })
+      process.exit(1)
+    })
 
   return serverInstance
 }
