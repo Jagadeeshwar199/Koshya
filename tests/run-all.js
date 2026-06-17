@@ -34,6 +34,7 @@ const tests = [
   'tests/production-ux-bugs.test.js',
   'tests/delete-flow.test.js',
   'tests/user-facing-fixes.test.js',
+  'tests/date-time-extraction.test.js',
   'tests/recurring-reminders.test.js',
   'tests/parse-first.test.js',
   'tests/pending-duplicate.test.js',

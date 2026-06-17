@@ -136,7 +136,7 @@ function extractTime(text) {
     }
   }
 
-  const hourOnlyMatch = text.match(/\bat\s+(\d{1,2})(?!\d|:)/i)
+  const hourOnlyMatch = text.match(/\bat\s+(\d{1,2})(?!\d|:)(?!(?:st|nd|rd|th)\b)/i)
 
   if (hourOnlyMatch) {
     return {
