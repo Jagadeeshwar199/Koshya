@@ -29,6 +29,14 @@ const rent = parseFirst('Pay rent on 1st every month')
 assert.match(rent.taskText, /Pay rent/i)
 assert.equal(rent.itemType, 'BILL')
 
+const act = parseFirst('ACT fibernet renews at 10th june every 3 months')
+assert.equal(act.itemType, 'SUBSCRIPTION')
+assert.equal(act.taskText, 'Act Fibernet')
+assert.match(act.scheduleText, /Every 3 months/i)
+
+assert.equal(parseFirst('Remind me every day to take vitamins').itemType, 'REMINDER')
+assert.equal(parseFirst('Remind me tomorrow at 9 PM').itemType, 'REMINDER')
+
 const rule = parseFirst('Remind me tomorrow at 9 PM')
 assert.ok(rule.ruleScore >= 0)
 assert.equal(rule.escalatedToAi, rule.ruleScore < 90)
@@ -55,4 +63,4 @@ assert.doesNotMatch(
   /Subscription set/
 )
 
-console.log('Parse-first tests passed: 10')
+console.log('Parse-first tests passed: 13')

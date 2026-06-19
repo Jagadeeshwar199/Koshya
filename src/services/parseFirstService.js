@@ -39,8 +39,19 @@ function parseClock(text) {
   return { hour, minute }
 }
 
+function subscriptionParseFields(parsed) {
+  if (parsed?.success && parsed?.type === 'subscription') {
+    return parsed
+  }
+  if (parsed?.draft?.serviceName && parsed?.draft?.recurrence) {
+    return parsed.draft
+  }
+  return null
+}
+
 function extractScheduleText(text, entities, parsed) {
   const lower = String(text || '').toLowerCase()
+  const sub = subscriptionParseFields(parsed)
   const weekday = lower.match(
     /\bevery\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b(?:\s+(?:at\s+)?(\d{1,2}(?::\d{2})?\s*(?:am|pm)?))?/i
   )
@@ -54,12 +65,12 @@ function extractScheduleText(text, entities, parsed) {
     const clock = entities.date?.time || parseClock(text)
     return clock ? `Every day · ${formatTime(clock)}` : 'Every day'
   }
-  const dayNum = parsed?.draft?.renewalDay || entities.date?.day
-  if ((parsed?.draft?.recurrence === 'monthly' || entities.recurrence === 'monthly' || /\bevery\s+month\b/i.test(lower)) && dayNum) {
+  const dayNum = sub?.renewalDay || parsed?.draft?.renewalDay || entities.date?.day
+  if ((sub?.recurrence === 'monthly' || parsed?.draft?.recurrence === 'monthly' || entities.recurrence === 'monthly' || /\bevery\s+month\b/i.test(lower)) && dayNum) {
     return `Every month on ${ordinal(dayNum)}`
   }
-  if (parsed?.draft?.serviceName && (parsed?.draft?.recurrence || parsed?.draft?.renewalDay)) {
-    return formatScheduleShort(parsed.draft)
+  if (sub?.serviceName && (sub?.recurrence || sub?.renewalDay)) {
+    return formatScheduleShort(sub)
   }
   if (entities.date?.kind === 'relative' && entities.date.value === 'tomorrow') {
     return entities.date.time ? `Tomorrow · ${formatTime(entities.date.time)}` : 'Tomorrow'
@@ -101,7 +112,7 @@ function extractTaskText(text, entities, parsed, itemType) {
 
 function classifyItemType(text, entities, parsed) {
   const lower = String(text || '').toLowerCase()
-  if (SUBSCRIPTION_HINT.test(lower) || (parsed?.draft?.serviceName && parsed?.draft?.recurrence)) {
+  if (subscriptionParseFields(parsed) || SUBSCRIPTION_HINT.test(lower)) {
     return 'SUBSCRIPTION'
   }
   if (BILL_HINT.test(lower) && (entities.recurrence || /\b(?:every|monthly|\d{1,2}(?:st|nd|rd|th))\b/i.test(lower))) {

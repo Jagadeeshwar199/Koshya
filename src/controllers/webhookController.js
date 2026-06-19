@@ -30,6 +30,14 @@ async function handleWebhook(req, res) {
     const statusUpdate = value?.statuses?.[0]
 
     if (statusUpdate) {
+      logger.info('whatsapp.delivery_status', {
+        status: statusUpdate.status,
+        messageId: statusUpdate.id,
+        recipientId: statusUpdate.recipient_id,
+        timestamp: statusUpdate.timestamp,
+        raw: statusUpdate
+      })
+
       return res.sendStatus(200)
     }
 
