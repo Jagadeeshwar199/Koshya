@@ -66,8 +66,8 @@ subs = [{
 
   const hi = await handleHelpIntent('919999999999', { intent: INTENTS.HELP, rawText: 'hi' })
   assert.ok(hi.replySent)
-  assert.match(WELCOME_TEXT, /Just message me naturally/)
-  assert.match(WELCOME_TEXT, /No commands to learn/)
+  assert.match(WELCOME_TEXT, /bank statement/i)
+  assert.match(WELCOME_TEXT, /Upload a bank statement/i)
   assert.doesNotMatch(WELCOME_TEXT, /Show subscriptions/)
 
   console.log('Production UX bug tests passed: 3')

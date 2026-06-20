@@ -36,6 +36,7 @@ const tests = [
   'tests/user-facing-fixes.test.js',
   'tests/date-time-extraction.test.js',
   'tests/recurring-reminders.test.js',
+  'tests/bank-statement-detection.test.js',
   'tests/parse-first.test.js',
   'tests/pending-duplicate.test.js',
   'tests/core-architecture.test.js',

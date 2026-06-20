@@ -13,7 +13,11 @@ Just message me naturally:
 
 That's it. No commands to learn.`
 
-const WELCOME_TEXT = HELP_TEXT
+const WELCOME_TEXT = `👋 Welcome to Koshya
+
+I can find subscriptions from your bank statement.
+
+📄 Upload a bank statement (PDF/CSV) to get started.`
 
 const SUB_SAVED_NEXT = ''
 const REM_SAVED_NEXT = ''
