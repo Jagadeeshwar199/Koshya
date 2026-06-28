@@ -7,7 +7,6 @@ const {
 } = require('../services/bankStatement/detectionService')
 const store = require('../services/bankStatement/storeService')
 const { ApiError } = require('../utils/apiError')
-const logger = require('../../utils/logger')
 
 function validatePhone(userPhone) {
   if (!userPhone || !/^\d{8,15}$/.test(String(userPhone))) {
@@ -18,23 +17,12 @@ function validatePhone(userPhone) {
 async function analyze(req, res, next) {
   try {
     const { userPhone, fileName, fileType = 'csv', content } = req.body || {}
-    logger.info('bank_statement.debug.request_received', {
-      userPhone,
-      fileName,
-      fileType,
-      contentLength: content ? String(content).length : 0
-    })
     validatePhone(userPhone)
     if (!content || !String(content).trim()) {
       throw new ApiError(400, 'content is required')
     }
     const result = await analyzeStatement({ userPhone, fileName, fileType, content })
     const code = result.status === 'duplicate' ? 200 : 201
-    logger.info('bank_statement.debug.response', {
-      statementId: result.statementId,
-      status: result.status,
-      httpStatus: code
-    })
     res.status(code).json({ success: true, ...result })
   } catch (err) {
     next(err)

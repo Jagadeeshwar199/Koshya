@@ -51,13 +51,6 @@ async function getStatement(statementId) {
 }
 
 async function createStatement({ userPhone, fileName, fileType, rawContent, fileHash = null, bankName = null }) {
-  logger.info('bank_statement.debug.insert_before', {
-    supabaseUrl: process.env.SUPABASE_URL || null,
-    usesServiceRole: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
-    userPhone,
-    fileType,
-    fileHash
-  })
   const { data, error } = await supabase
     .from('bank_statements')
     .insert({
@@ -71,16 +64,7 @@ async function createStatement({ userPhone, fileName, fileType, rawContent, file
     })
     .select('*')
     .single()
-  if (error) {
-    logger.error('bank_statement.debug.insert_failed', {
-      code: error.code,
-      message: error.message,
-      details: error.details,
-      hint: error.hint
-    })
-    throw error
-  }
-  logger.info('bank_statement.debug.insert_after', { statementId: data.id, status: data.status })
+  if (error) throw error
   await logStage(data.id, 'upload', 'statement_created', { fileName, fileType, fileHash, bankName })
   return data
 }

@@ -123,10 +123,6 @@ async function analyzeStatement({
   if (!statementId) {
     const duplicate = await store.findByHash(userPhone, fileHash)
     if (duplicate) {
-      logger.info('bank_statement.debug.duplicate_early_return', {
-        statementId: duplicate.id,
-        fileHash
-      })
       const existingResults = await store.getResults(duplicate.id)
       return {
         statementId: duplicate.id,
@@ -158,14 +154,6 @@ async function analyzeStatement({
   await store.logStage(statement.id, 'parse', 'started', { fileType, hasPassword: Boolean(password), uploadId })
 
   const extracted = await extractTransactions(content, fileType, password)
-  logger.info('bank_statement.debug.transactions_extracted', {
-    uploadId,
-    statementId: statement.id,
-    txnCount: extracted.transactions?.length ?? 0,
-    passwordRequired: Boolean(extracted.passwordRequired),
-    parseError: extracted.error || null,
-    bank: extracted.bank || null
-  })
   if (extracted.passwordRequired) {
     await store.updateStatementStatus(statement.id, 'awaiting_password')
     await store.logStage(statement.id, 'parse', 'awaiting_password', {
@@ -204,12 +192,6 @@ async function analyzeStatement({
 
   const groups = groupByMerchant(txns.filter((t) => t.txnType !== 'loan_repayment'))
   const recurring = detectRecurringGroups(groups)
-  logger.info('bank_statement.debug.detection_start', {
-    uploadId,
-    statementId: statement.id,
-    groupCount: groups.length,
-    recurringCount: recurring.length
-  })
   const finalResults = await processRecurringGroups(statement.id, recurring)
 
   const status = finalResults.length ? 'awaiting_confirmation' : 'completed'
