@@ -23,4 +23,5 @@
 | 2026-06 | Webhook rejected valid Gupshup payload | Strict signature only | Parse alternate payload shapes; allow inbound when message present | `webhook-auth.test.js` |
 | 2026-06 | Reminder list duplicates | No dedupe on list output | `dedupeReminders` in `reminderService` | — |
 | 2026-06 | Wrong delete target (reminder vs subscription) | Ambiguous “delete …” phrasing | `intentService` disambiguation | `day13.test.js` |
-| 2026-06 | Typos/NL missed by phrase intents | Regex-first `intentService` | `src/intent/*` semantic+fuzzy+confidence; 215 cases | `intent-semantic.test.js` |
+| 2026-06 | Bank statement insert 42501 (RLS) | Railway `SUPABASE_SERVICE_ROLE_KEY` was `sb_publishable_*` not `sb_secret_*` | Set correct secret key in Railway | — |
+| 2026-06 | WhatsApp YES after statement scan ignored | No webhook handler for `awaiting_confirmation`; confirm passed `renewalDay: null` | Handle YES in webhook; infer renewal day from txn dates | `webhook-bank-statement-handler.test.js` |

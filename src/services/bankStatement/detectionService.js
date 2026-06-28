@@ -248,12 +248,13 @@ async function confirmStatement({ statementId, userPhone, resultIds = null }) {
   const created = []
   const { createSubscriptionRecord } = require('../subscriptionService')
   for (const row of selected) {
+    const renewalDay = await store.inferRenewalDayFromMerchant(statementId, row.merchant_id)
     const subscription = await createSubscriptionRecord({
       userPhone,
       serviceName: row.service_name,
       amount: row.amount,
       recurrence: normalizeRecurrence(row.recurrence),
-      renewalDay: null
+      renewalDay
     })
     await store.markResultConfirmed(row.id, subscription.id)
     created.push({ resultId: row.id, subscriptionId: subscription.id, serviceName: row.service_name })

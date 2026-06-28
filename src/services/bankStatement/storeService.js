@@ -23,6 +23,19 @@ async function findAwaitingPasswordStatement(userPhone) {
   return data
 }
 
+async function findAwaitingConfirmationStatement(userPhone) {
+  const { data, error } = await supabase
+    .from('bank_statements')
+    .select('*')
+    .eq('user_phone', userPhone)
+    .eq('status', 'awaiting_confirmation')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
 async function clearAwaitingPasswordStatement(statementId) {
   await updateStatementStatus(statementId, 'cancelled')
   await logStage(statementId, 'password', 'entry_cancelled', {})
@@ -64,7 +77,16 @@ async function createStatement({ userPhone, fileName, fileType, rawContent, file
     })
     .select('*')
     .single()
-  if (error) throw error
+  if (error) {
+    logger.error('bank_statement.insert_failed', {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      data: null
+    })
+    throw error
+  }
   await logStage(data.id, 'upload', 'statement_created', { fileName, fileType, fileHash, bankName })
   return data
 }
@@ -221,6 +243,32 @@ async function getResults(statementId) {
   return data || []
 }
 
+async function inferRenewalDayFromMerchant(statementId, merchantId) {
+  if (!merchantId) return 1
+  const { data: merchant, error: merchantError } = await supabase
+    .from('bank_statement_merchants')
+    .select('normalized_name')
+    .eq('id', merchantId)
+    .maybeSingle()
+  if (merchantError) throw merchantError
+  if (!merchant?.normalized_name) return 1
+
+  const { data: txns, error } = await supabase
+    .from('bank_statement_transactions')
+    .select('txn_date')
+    .eq('statement_id', statementId)
+    .eq('normalized_merchant', merchant.normalized_name)
+    .not('txn_date', 'is', null)
+    .order('txn_date', { ascending: false })
+    .limit(1)
+  if (error) throw error
+
+  const latest = txns?.[0]?.txn_date
+  if (!latest) return 1
+  const day = Number(String(latest).slice(8, 10))
+  return Number.isFinite(day) && day >= 1 && day <= 31 ? day : 1
+}
+
 async function markResultConfirmed(resultId, subscriptionId) {
   const { data, error } = await supabase
     .from('bank_statement_detection_results')
@@ -240,6 +288,7 @@ module.exports = {
   logStage,
   hashContent,
   findAwaitingPasswordStatement,
+  findAwaitingConfirmationStatement,
   clearAwaitingPasswordStatement,
   findByHash,
   getStatement,
@@ -254,5 +303,6 @@ module.exports = {
   updateStatement,
   updateStatementStatus,
   getResults,
+  inferRenewalDayFromMerchant,
   markResultConfirmed
 }

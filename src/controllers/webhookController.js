@@ -8,7 +8,7 @@ const {
 const { sendWhatsAppMessage } = require('../services/whatsappService')
 const { parseWebhookMessage } = require('../utils/webhookMessage')
 const { WELCOME_TEXT } = require('../controllers/queryController')
-const { analyzeStatement } = require('../services/bankStatement/detectionService')
+const { analyzeStatement, confirmStatement } = require('../services/bankStatement/detectionService')
 const store = require('../services/bankStatement/storeService')
 const {
   resolveFileType,
@@ -17,6 +17,11 @@ const {
 } = require('../services/gupshupMediaService')
 const { isApiError } = require('../utils/apiError')
 const { isPasswordCancel, isPlausiblePassword } = require('../utils/passwordInput')
+
+function isBankStatementConfirm(text) {
+  const t = String(text || '').trim().toLowerCase()
+  return /^(yes|y|ok|okay|confirm|sure|do it)$/.test(t)
+}
 const logger = require('../../utils/logger')
 const { logExecution } = require('../observability/pipelineLogService')
 
@@ -300,6 +305,26 @@ async function handleWebhook(req, res) {
     if (pendingPassword) {
       const uploadId = crypto.randomUUID()
       await handleAwaitingPasswordText(sender, pendingPassword, text, uploadId, messageId)
+      return res.sendStatus(200)
+    }
+
+    const pendingConfirm = await store.findAwaitingConfirmationStatement(sender)
+    if (pendingConfirm && isBankStatementConfirm(text)) {
+      const uploadId = crypto.randomUUID()
+      try {
+        const result = await confirmStatement({
+          statementId: pendingConfirm.id,
+          userPhone: sender
+        })
+        await sendFileReply(sender, result.message, uploadId)
+      } catch (err) {
+        logCatch(uploadId, 'bank_statement.confirm_failed', err)
+        const msg = isApiError(err)
+          ? err.message
+          : 'Something went wrong confirming subscriptions.\n\nTry again or reply help.'
+        await sendFileReply(sender, msg, uploadId)
+      }
+      if (messageId) await markMessageProcessed(messageId, sender)
       return res.sendStatus(200)
     }
 
