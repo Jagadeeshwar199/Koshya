@@ -153,11 +153,23 @@ async function analyzeStatement({
   await store.updateStatementStatus(statement.id, 'processing')
   await store.logStage(statement.id, 'parse', 'started', { fileType, hasPassword: Boolean(password), uploadId })
 
-  const extracted = await extractTransactions(content, fileType, password)
-  if (extracted.passwordRequired) {
+  const trimmedPassword = password ? String(password).trim() : null
+  const extracted = await extractTransactions(content, fileType, trimmedPassword)
+  const parseOutcome = extracted.parseOutcome || (extracted.error ? 'error' : 'success')
+
+  logger.info('bank_statement.parse_outcome', {
+    uploadId,
+    statementId: statement.id,
+    outcome: parseOutcome,
+    parseErrorType: extracted.parseErrorType || null,
+    parseErrorMessage: extracted.parseErrorMessage || extracted.error || null,
+    hadPassword: Boolean(trimmedPassword)
+  })
+
+  if (parseOutcome === 'password_needed') {
     await store.updateStatementStatus(statement.id, 'awaiting_password')
     await store.logStage(statement.id, 'parse', 'awaiting_password', {
-      hadPasswordAttempt: Boolean(password),
+      hadPasswordAttempt: false,
       uploadId
     })
     return {
@@ -166,14 +178,39 @@ async function analyzeStatement({
       transactionCount: 0,
       bankName: null,
       subscriptions: [],
-      message: password
-        ? 'Incorrect password. Please send the PDF password again.'
-        : 'This PDF is password protected. Reply with the PDF password to continue.'
+      message: 'This PDF is password protected. Reply with the PDF password to continue.'
     }
   }
-  if (extracted.error) {
+
+  if (parseOutcome === 'incorrect_password') {
+    await store.updateStatementStatus(statement.id, 'awaiting_password')
+    await store.logStage(statement.id, 'parse', 'awaiting_password', {
+      hadPasswordAttempt: true,
+      uploadId
+    })
+    return {
+      statementId: statement.id,
+      status: 'awaiting_password',
+      transactionCount: 0,
+      bankName: null,
+      subscriptions: [],
+      message: 'Incorrect password. Please send the PDF password again.'
+    }
+  }
+
+  if (parseOutcome === 'implementation_error') {
     await store.updateStatementStatus(statement.id, 'failed')
-    throw new ApiError(400, `failed to parse statement: ${extracted.error}`)
+    await store.logStage(statement.id, 'parse', 'implementation_error', {
+      parseErrorType: extracted.parseErrorType,
+      parseErrorMessage: extracted.parseErrorMessage,
+      uploadId
+    })
+    throw new ApiError(502, `failed to parse statement: ${extracted.parseErrorMessage}`)
+  }
+
+  if (parseOutcome === 'error' || extracted.error) {
+    await store.updateStatementStatus(statement.id, 'failed')
+    throw new ApiError(400, `failed to parse statement: ${extracted.error || extracted.parseErrorMessage}`)
   }
 
   const bankName = extracted.bank || null
@@ -225,7 +262,7 @@ async function unlockStatement({ statementId, userPhone, password }) {
     fileType: statement.file_type,
     content: statement.raw_content,
     statementId: statement.id,
-    password: String(password)
+    password: String(password).trim()
   })
 }
 

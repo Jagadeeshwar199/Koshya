@@ -24,4 +24,4 @@
 | 2026-06 | Reminder list duplicates | No dedupe on list output | `dedupeReminders` in `reminderService` | — |
 | 2026-06 | Wrong delete target (reminder vs subscription) | Ambiguous “delete …” phrasing | `intentService` disambiguation | `day13.test.js` |
 | 2026-06 | Bank statement insert 42501 (RLS) | Railway `SUPABASE_SERVICE_ROLE_KEY` was `sb_publishable_*` not `sb_secret_*` | Set correct secret key in Railway | — |
-| 2026-06 | WhatsApp YES after statement scan ignored | No webhook handler for `awaiting_confirmation`; confirm passed `renewalDay: null` | Handle YES in webhook; infer renewal day from txn dates | `webhook-bank-statement-handler.test.js` |
+| 2026-06 | Password retry always said "Incorrect password" | `passwordRequired` lumped PasswordException code 1+2 | Map PDF.js outcomes: `password_needed`, `incorrect_password`, `implementation_error`, `error` | `pdf-password.test.js` |

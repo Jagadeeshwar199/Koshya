@@ -86,33 +86,101 @@ function extractTransactionsFromPdfText(text, bank = 'generic') {
   return txns
 }
 
-async function extractPdfText(buffer, password) {
-  let pdfParse
-  try {
-    pdfParse = require('pdf-parse')
-  } catch (_) {
-    return { error: 'pdf_parser_unavailable' }
+function renderPdfPage(pageData) {
+  const renderOptions = {
+    normalizeWhitespace: false,
+    disableCombineTextItems: false
   }
+  return pageData.getTextContent(renderOptions).then((textContent) => {
+    let lastY
+    let text = ''
+    for (const item of textContent.items) {
+      if (lastY == item.transform[5] || !lastY) {
+        text += item.str
+      } else {
+        text += `\n${item.str}`
+      }
+      lastY = item.transform[5]
+    }
+    return text
+  })
+}
+
+let pdfJsModule = null
+
+function getPdfJs() {
+  if (!pdfJsModule) {
+    try {
+      pdfJsModule = require('pdf-parse/lib/pdf.js/v1.10.100/build/pdf.js')
+    } catch (_) {
+      return null
+    }
+    pdfJsModule.disableWorker = true
+  }
+  return pdfJsModule
+}
+
+async function parsePdfBuffer(buffer, password = null) {
+  const PDFJS = getPdfJs()
+  if (!PDFJS) {
+    throw new Error('pdf_parser_unavailable')
+  }
+  const data = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer)
+  const src = password ? { data, password: String(password) } : { data }
+  const doc = await PDFJS.getDocument(src)
+  let text = ''
+  for (let i = 1; i <= doc.numPages; i++) {
+    const pageText = await doc
+      .getPage(i)
+      .then((pageData) => renderPdfPage(pageData))
+      .catch(() => '')
+    text = `${text}\n\n${pageText}`
+  }
+  doc.destroy()
+  return text
+}
+
+function classifyPdfError(err, passwordSupplied) {
+  const msg = String(err?.message || err)
+  const parseErrorType = err?.name || 'Error'
+  const parseErrorMessage = msg
+
+  if (err?.code === 2 || /incorrect password/i.test(msg)) {
+    return { parseOutcome: 'incorrect_password', parseErrorType, parseErrorMessage }
+  }
+  if (err?.code === 1 || /no password given/i.test(msg)) {
+    if (passwordSupplied) {
+      return { parseOutcome: 'implementation_error', parseErrorType, parseErrorMessage }
+    }
+    return { parseOutcome: 'password_needed', parseErrorType, parseErrorMessage }
+  }
+  return { parseOutcome: 'error', parseErrorType, parseErrorMessage, error: msg }
+}
+
+async function extractPdfText(buffer, password) {
+  if (!getPdfJs()) {
+    return { parseOutcome: 'error', parseErrorType: 'Error', parseErrorMessage: 'pdf_parser_unavailable', error: 'pdf_parser_unavailable' }
+  }
+  const passwordSupplied = Boolean(password && String(password).trim())
   try {
-    const data = await pdfParse(buffer, password ? { password } : {})
-    const text = data?.text || ''
-    return { text, bank: detectBank(text) }
+    const text = await parsePdfBuffer(buffer, passwordSupplied ? String(password).trim() : null)
+    return { parseOutcome: 'success', text, bank: detectBank(text) }
   } catch (err) {
-    const msg = String(err?.message || err)
-    if (/password|encrypted|decrypt/i.test(msg)) return { passwordRequired: true }
-    return { error: msg }
+    return classifyPdfError(err, passwordSupplied)
   }
 }
 
 async function extractPdfTransactions(buffer, password) {
   const extracted = await extractPdfText(buffer, password)
-  if (extracted.passwordRequired) return { passwordRequired: true }
-  if (extracted.error) return { error: extracted.error }
-  return {
-    bank: extracted.bank,
-    transactions: extractTransactionsFromPdfText(extracted.text, extracted.bank),
-    text: extracted.text
+  if (extracted.parseOutcome === 'success') {
+    return {
+      parseOutcome: 'success',
+      bank: extracted.bank,
+      transactions: extractTransactionsFromPdfText(extracted.text, extracted.bank),
+      text: extracted.text
+    }
   }
+  return extracted
 }
 
 module.exports = {

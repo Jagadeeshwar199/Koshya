@@ -37,6 +37,7 @@ const tests = [
   'tests/date-time-extraction.test.js',
   'tests/recurring-reminders.test.js',
   'tests/bank-statement-detection.test.js',
+  'tests/pdf-password.test.js',
   'tests/webhook-file-upload.test.js',
   'tests/password-input.test.js',
   'tests/webhook-bank-statement-handler.test.js',
