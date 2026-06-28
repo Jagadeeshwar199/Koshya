@@ -12,6 +12,7 @@ const {
 } = require('./messageUtil')
 const store = require('./storeService')
 const { ApiError } = require('../../utils/apiError')
+const logger = require('../../../utils/logger')
 
 function inferRenewalDay(group) {
   const dated = (group?.transactions || []).filter((t) => t.txnDate).sort((a, b) => a.txnDate.localeCompare(b.txnDate))
@@ -108,12 +109,24 @@ async function processRecurringGroups(statementId, recurring) {
   return finalResults
 }
 
-async function analyzeStatement({ userPhone, fileName, fileType, content, statementId = null, password = null }) {
+async function analyzeStatement({
+  userPhone,
+  fileName,
+  fileType,
+  content,
+  statementId = null,
+  password = null,
+  uploadId = null
+}) {
   const fileHash = store.hashContent(content)
 
   if (!statementId) {
     const duplicate = await store.findByHash(userPhone, fileHash)
     if (duplicate) {
+      logger.info('bank_statement.debug.duplicate_early_return', {
+        statementId: duplicate.id,
+        fileHash
+      })
       const existingResults = await store.getResults(duplicate.id)
       return {
         statementId: duplicate.id,
@@ -142,19 +155,32 @@ async function analyzeStatement({ userPhone, fileName, fileType, content, statem
   }
 
   await store.updateStatementStatus(statement.id, 'processing')
-  await store.logStage(statement.id, 'parse', 'started', { fileType, hasPassword: Boolean(password) })
+  await store.logStage(statement.id, 'parse', 'started', { fileType, hasPassword: Boolean(password), uploadId })
 
   const extracted = await extractTransactions(content, fileType, password)
+  logger.info('bank_statement.debug.transactions_extracted', {
+    uploadId,
+    statementId: statement.id,
+    txnCount: extracted.transactions?.length ?? 0,
+    passwordRequired: Boolean(extracted.passwordRequired),
+    parseError: extracted.error || null,
+    bank: extracted.bank || null
+  })
   if (extracted.passwordRequired) {
-    await store.updateStatementStatus(statement.id, 'password_required')
-    await store.logStage(statement.id, 'parse', 'password_required', {})
+    await store.updateStatementStatus(statement.id, 'awaiting_password')
+    await store.logStage(statement.id, 'parse', 'awaiting_password', {
+      hadPasswordAttempt: Boolean(password),
+      uploadId
+    })
     return {
       statementId: statement.id,
-      status: 'password_required',
+      status: 'awaiting_password',
       transactionCount: 0,
       bankName: null,
       subscriptions: [],
-      message: 'This PDF is password protected. Send the password to continue.'
+      message: password
+        ? 'Incorrect password. Please send the PDF password again.'
+        : 'This PDF is password protected. Reply with the PDF password to continue.'
     }
   }
   if (extracted.error) {
@@ -178,6 +204,12 @@ async function analyzeStatement({ userPhone, fileName, fileType, content, statem
 
   const groups = groupByMerchant(txns.filter((t) => t.txnType !== 'loan_repayment'))
   const recurring = detectRecurringGroups(groups)
+  logger.info('bank_statement.debug.detection_start', {
+    uploadId,
+    statementId: statement.id,
+    groupCount: groups.length,
+    recurringCount: recurring.length
+  })
   const finalResults = await processRecurringGroups(statement.id, recurring)
 
   const status = finalResults.length ? 'awaiting_confirmation' : 'completed'
@@ -202,7 +234,7 @@ async function unlockStatement({ statementId, userPhone, password }) {
   if (statement.user_phone !== userPhone) {
     throw new ApiError(403, 'statement does not belong to this user')
   }
-  if (statement.status !== 'password_required') {
+  if (!['awaiting_password', 'password_required'].includes(statement.status)) {
     throw new ApiError(400, 'statement is not awaiting a password')
   }
   return analyzeStatement({

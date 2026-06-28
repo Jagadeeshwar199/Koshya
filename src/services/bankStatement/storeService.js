@@ -10,6 +10,24 @@ async function logStage(statementId, stage, event, payload = {}) {
   return row
 }
 
+async function findAwaitingPasswordStatement(userPhone) {
+  const { data, error } = await supabase
+    .from('bank_statements')
+    .select('*')
+    .eq('user_phone', userPhone)
+    .in('status', ['awaiting_password', 'password_required'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
+async function clearAwaitingPasswordStatement(statementId) {
+  await updateStatementStatus(statementId, 'cancelled')
+  await logStage(statementId, 'password', 'entry_cancelled', {})
+}
+
 async function findByHash(userPhone, fileHash) {
   const { data, error } = await supabase
     .from('bank_statements')
@@ -33,6 +51,13 @@ async function getStatement(statementId) {
 }
 
 async function createStatement({ userPhone, fileName, fileType, rawContent, fileHash = null, bankName = null }) {
+  logger.info('bank_statement.debug.insert_before', {
+    supabaseUrl: process.env.SUPABASE_URL || null,
+    usesServiceRole: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+    userPhone,
+    fileType,
+    fileHash
+  })
   const { data, error } = await supabase
     .from('bank_statements')
     .insert({
@@ -46,7 +71,16 @@ async function createStatement({ userPhone, fileName, fileType, rawContent, file
     })
     .select('*')
     .single()
-  if (error) throw error
+  if (error) {
+    logger.error('bank_statement.debug.insert_failed', {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint
+    })
+    throw error
+  }
+  logger.info('bank_statement.debug.insert_after', { statementId: data.id, status: data.status })
   await logStage(data.id, 'upload', 'statement_created', { fileName, fileType, fileHash, bankName })
   return data
 }
@@ -221,6 +255,8 @@ async function markResultConfirmed(resultId, subscriptionId) {
 module.exports = {
   logStage,
   hashContent,
+  findAwaitingPasswordStatement,
+  clearAwaitingPasswordStatement,
   findByHash,
   getStatement,
   createStatement,
